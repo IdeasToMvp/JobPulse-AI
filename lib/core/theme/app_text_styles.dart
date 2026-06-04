@@ -223,4 +223,43 @@ class AppTextStyles {
     fontSize: 11,
     fontWeight: FontWeight.w600,
   );
+
+  static TextStyle darkGreeting = GoogleFonts.inter(
+    fontSize: 24,
+    fontWeight: FontWeight.w700,
+    color: AppColors.onboardingTitle,
+    height: 1.2,
+  );
+
+  static TextStyle darkSubtitle = GoogleFonts.inter(
+    fontSize: 14,
+    fontWeight: FontWeight.w400,
+    color: AppColors.onboardingBody,
+  );
+
+  static TextStyle darkSectionTitle = GoogleFonts.inter(
+    fontSize: 16,
+    fontWeight: FontWeight.w700,
+    color: AppColors.onboardingTitle,
+  );
+
+  static TextStyle darkStatValue = GoogleFonts.inter(
+    fontSize: 28,
+    fontWeight: FontWeight.w700,
+    color: AppColors.primary,
+    height: 1,
+  );
+
+  static TextStyle darkStatCaption = GoogleFonts.inter(
+    fontSize: 12,
+    fontWeight: FontWeight.w500,
+    color: AppColors.dashboardMuted,
+  );
+
+  static TextStyle darkCardTag = GoogleFonts.jetBrainsMono(
+    fontSize: 9,
+    fontWeight: FontWeight.w700,
+    letterSpacing: 0.4,
+    color: AppColors.dashboardMuted,
+  );
 }

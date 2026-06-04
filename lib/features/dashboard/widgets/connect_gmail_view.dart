@@ -10,9 +10,11 @@ class ConnectGmailView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-      child: Column(
+    return ColoredBox(
+      color: AppColors.onboardingBackground,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const SyncHubHero(),
@@ -85,6 +87,7 @@ class ConnectGmailView extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
         ],
+      ),
       ),
     );
   }

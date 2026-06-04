@@ -56,6 +56,15 @@ class AppColors {
   static const dashboardMuted = Color(0xFF8E8E98);
   static const connectHubBg = Color(0xFF1A1A72);
   static const connectSecureBadge = Color(0xFFE8F0FE);
+
+  static const dashboardDarkBg = Color(0xFF0B111B);
+  static const dashboardDarkCard = Color(0xFF141C2B);
+  static const dashboardDarkCardElevated = Color(0xFF1A2438);
+  static const dashboardDarkBorder = Color(0xFF2A3448);
+  static const dashboardDarkText = Color(0xFFF5F7FA);
+  static const dashboardDarkMuted = Color(0xFF94A3B8);
+  static const dashboardInsightBg = Color(0xFF1A1F35);
+  static const dashboardChipBg = Color(0xFF1E293B);
 }
 
 class StatusColors {
