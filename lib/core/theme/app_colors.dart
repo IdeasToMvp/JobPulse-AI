@@ -22,6 +22,40 @@ class AppColors {
   static const splashIconTint = Color(0x99B0B0E0);
   static const splashNodeFill = Color(0x33B0B0E0);
   static const splashConnector = Color(0x4DB0B0E0);
+
+  static const onboardingBackground = Color(0xFFF8F8FF);
+  static const onboardingHeroBg = Color(0xFF14141F);
+  static const onboardingBadgeBg = Color(0xFFE8E4F8);
+  static const onboardingGlassFill = Color(0x33FFFFFF);
+  static const onboardingGlassBorder = Color(0x4DFFFFFF);
+  static const onboardingCardBg = Color(0xFFFFFFFF);
+  static const onboardingTitle = Color(0xFF111111);
+  static const onboardingBody = Color(0xFF6B6B76);
+  static const onboardingFooter = Color(0xFF9A9AA3);
+  static const onboardingIconPurple = Color(0xFFEDE9FE);
+  static const onboardingIconLavender = Color(0xFFF3E8FF);
+  static const onboardingIconPeach = Color(0xFFFFEDD5);
+  static const onboardingIconSlate = Color(0xFFE2E8F0);
+
+  static const loginGradientTop = Color(0xFFF0EEF8);
+  static const loginGradientBottom = Color(0xFFFFFFFF);
+  static const loginHeroCircle = Color(0xFF2E3192);
+  static const loginCardBg = Color(0xFFFFFFFF);
+  static const loginSecurityBox = Color(0xFFF3F0FF);
+  static const loginDivider = Color(0xFFE4E4EA);
+  static const loginMuted = Color(0xFF8E8E98);
+
+  static const platformsBackground = Color(0xFFFFFFFF);
+  static const platformsCardBorder = Color(0xFFE8E8ED);
+  static const platformsCardSelected = Color(0xFFF0EEF8);
+  static const platformsBenefitsBg = Color(0xFFF3F0FF);
+  static const platformsProgressTrack = Color(0xFFE8E8ED);
+
+  static const dashboardBackground = Color(0xFFF5F5FA);
+  static const dashboardCard = Color(0xFFFFFFFF);
+  static const dashboardMuted = Color(0xFF8E8E98);
+  static const connectHubBg = Color(0xFF1A1A72);
+  static const connectSecureBadge = Color(0xFFE8F0FE);
 }
 
 class StatusColors {
