@@ -471,6 +471,7 @@ export class SyncService {
         fromDate: formatIsoDate(fromDate),
         toDate: formatIsoDate(toDate),
         newMessages,
+        newApplications,
         skippedProcessed,
         aiCalls,
         companiesDiscovered,

@@ -1,3 +1,5 @@
+import '../utils/salary_format.dart';
+
 class ApplicationExtractedDetails {
   const ApplicationExtractedDetails({
     this.company,
@@ -28,6 +30,86 @@ class ApplicationExtractedDetails {
       confidence: (json['confidence'] as num?)?.toDouble(),
     );
   }
+}
+
+class ApplicationUserDetails {
+  const ApplicationUserDetails({
+    this.location,
+    this.salary,
+    this.numberOfRounds,
+    this.workMode,
+    this.notes,
+    this.updatedAt,
+  });
+
+  final String? location;
+  final String? salary;
+  final int? numberOfRounds;
+  final String? workMode;
+  final String? notes;
+  final DateTime? updatedAt;
+
+  bool get hasAny =>
+      (location?.isNotEmpty ?? false) ||
+      (salary?.isNotEmpty ?? false) ||
+      numberOfRounds != null ||
+      (workMode?.isNotEmpty ?? false) ||
+      (notes?.isNotEmpty ?? false);
+
+  Map<String, dynamic> toJson() {
+    final payload = <String, dynamic>{};
+    if (location != null && location!.isNotEmpty) {
+      payload['location'] = location;
+    }
+    if (salary != null && salary!.isNotEmpty) payload['salary'] = salary;
+    if (numberOfRounds != null) payload['numberOfRounds'] = numberOfRounds;
+    if (workMode != null && workMode!.isNotEmpty) {
+      payload['workMode'] = workMode;
+    }
+    if (notes != null && notes!.isNotEmpty) payload['notes'] = notes;
+    return payload;
+  }
+
+  Map<String, dynamic> toPatchJson() {
+    final payload = <String, dynamic>{
+      'location': location ?? '',
+      'salary': salary ?? '',
+      'notes': notes ?? '',
+    };
+    if (numberOfRounds != null) {
+      payload['numberOfRounds'] = numberOfRounds;
+    }
+    if (workMode != null) payload['workMode'] = workMode;
+    return payload;
+  }
+
+  factory ApplicationUserDetails.fromJson(Map<String, dynamic> json) {
+    return ApplicationUserDetails(
+      location: json['location'] as String?,
+      salary: json['salary'] as String?,
+      numberOfRounds: json['numberOfRounds'] as int?,
+      workMode: json['workMode'] as String?,
+      notes: json['notes'] as String?,
+      updatedAt: json['updatedAt'] != null
+          ? DateTime.tryParse(json['updatedAt'] as String)
+          : null,
+    );
+  }
+}
+
+String? displaySalary(JobApplication app) {
+  final user = app.userDetails?.salary;
+  final raw = (user != null && user.isNotEmpty)
+      ? user
+      : app.extractedDetails?.salary;
+  if (raw == null || raw.isEmpty) return null;
+  return formatSalaryDisplay(raw);
+}
+
+String? displayLocation(JobApplication app) {
+  final user = app.userDetails?.location;
+  if (user != null && user.isNotEmpty) return user;
+  return app.extractedDetails?.location;
 }
 
 class CompanyApplicationSummary {
@@ -84,6 +166,7 @@ class JobApplication {
     this.lastMessageAt,
     required this.updatedAt,
     this.extractedDetails,
+    this.userDetails,
     this.companyApplyCount,
     this.companyRoles,
   });
@@ -97,6 +180,7 @@ class JobApplication {
   final DateTime? lastMessageAt;
   final DateTime updatedAt;
   final ApplicationExtractedDetails? extractedDetails;
+  final ApplicationUserDetails? userDetails;
   final int? companyApplyCount;
   final List<String>? companyRoles;
 
@@ -104,6 +188,7 @@ class JobApplication {
     String? status,
     DateTime? updatedAt,
     ApplicationExtractedDetails? extractedDetails,
+    ApplicationUserDetails? userDetails,
     int? companyApplyCount,
     List<String>? companyRoles,
   }) {
@@ -117,6 +202,7 @@ class JobApplication {
       lastMessageAt: lastMessageAt,
       updatedAt: updatedAt ?? this.updatedAt,
       extractedDetails: extractedDetails ?? this.extractedDetails,
+      userDetails: userDetails ?? this.userDetails,
       companyApplyCount: companyApplyCount ?? this.companyApplyCount,
       companyRoles: companyRoles ?? this.companyRoles,
     );
@@ -127,6 +213,7 @@ class JobApplication {
     final lastMessageRaw = json['lastMessageAt'] as String?;
     final updatedRaw = json['updatedAt'] as String?;
     final extractedRaw = json['extractedDetails'] as Map<String, dynamic>?;
+    final userRaw = json['userDetails'] as Map<String, dynamic>?;
     final rolesRaw = json['companyRoles'] as List<dynamic>?;
 
     return JobApplication(
@@ -148,6 +235,9 @@ class JobApplication {
       extractedDetails: extractedRaw != null
           ? ApplicationExtractedDetails.fromJson(extractedRaw)
           : null,
+      userDetails: userRaw != null
+          ? ApplicationUserDetails.fromJson(userRaw)
+          : null,
       companyApplyCount: json['companyApplyCount'] as int?,
       companyRoles: rolesRaw?.map((e) => e as String).toList(),
     );
@@ -165,6 +255,7 @@ class ApplicationDetail extends JobApplication {
     super.lastMessageAt,
     required super.updatedAt,
     super.extractedDetails,
+    super.userDetails,
     super.companyApplyCount,
     super.companyRoles,
     required this.statusHistory,
@@ -189,6 +280,7 @@ class ApplicationDetail extends JobApplication {
       lastMessageAt: base.lastMessageAt,
       updatedAt: base.updatedAt,
       extractedDetails: base.extractedDetails,
+      userDetails: base.userDetails,
       companyApplyCount: base.companyApplyCount,
       companyRoles: base.companyRoles,
       statusHistory: historyRaw
@@ -219,6 +311,20 @@ class UpdateApplicationStatusResult {
         json['application'] as Map<String, dynamic>,
       ),
       sync: json['sync'] as Map<String, dynamic>? ?? {},
+    );
+  }
+}
+
+class UpdateApplicationDetailsResult {
+  const UpdateApplicationDetailsResult({required this.application});
+
+  final ApplicationDetail application;
+
+  factory UpdateApplicationDetailsResult.fromJson(Map<String, dynamic> json) {
+    return UpdateApplicationDetailsResult(
+      application: ApplicationDetail.fromJson(
+        json['application'] as Map<String, dynamic>,
+      ),
     );
   }
 }

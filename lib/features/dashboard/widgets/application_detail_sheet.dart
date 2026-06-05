@@ -6,6 +6,8 @@ import '../../../core/models/application.dart';
 import '../../../core/models/application_status.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/utils/salary_format.dart';
+import 'active_details_sheet.dart';
 import 'application_status_badge.dart';
 import 'update_status_sheet.dart';
 
@@ -23,11 +25,20 @@ const _platformLabels = {
 };
 
 class ApplicationDetailSheet extends StatefulWidget {
-  const ApplicationDetailSheet({super.key, required this.application});
+  const ApplicationDetailSheet({
+    super.key,
+    required this.application,
+    this.showStatusHistory = false,
+  });
 
   final JobApplication application;
+  final bool showStatusHistory;
 
-  static Future<void> show(BuildContext context, JobApplication application) {
+  static Future<void> show(
+    BuildContext context,
+    JobApplication application, {
+    bool showStatusHistory = false,
+  }) {
     return showModalBottomSheet<void>(
       context: context,
       backgroundColor: AppColors.white,
@@ -35,7 +46,10 @@ class ApplicationDetailSheet extends StatefulWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (_) => ApplicationDetailSheet(application: application),
+      builder: (_) => ApplicationDetailSheet(
+        application: application,
+        showStatusHistory: showStatusHistory,
+      ),
     );
   }
 
@@ -51,7 +65,11 @@ class _ApplicationDetailSheetState extends State<ApplicationDetailSheet> {
   @override
   void initState() {
     super.initState();
-    _load();
+    if (widget.showStatusHistory) {
+      _load();
+    } else {
+      _loading = false;
+    }
   }
 
   Future<void> _load() async {
@@ -94,6 +112,21 @@ class _ApplicationDetailSheetState extends State<ApplicationDetailSheet> {
       },
     );
   }
+
+  void _openDetailsEdit() {
+    ActiveDetailsSheet.show(
+      context,
+      application: _application,
+      mode: ActiveDetailsMode.editOnly,
+      onUpdated: (detail) {
+        setState(() => _detail = detail);
+      },
+    );
+  }
+
+  bool get _canEditDetails =>
+      _application.status == 'active' ||
+      (_application.userDetails?.hasAny ?? false);
 
   @override
   Widget build(BuildContext context) {
@@ -162,6 +195,65 @@ class _ApplicationDetailSheetState extends State<ApplicationDetailSheet> {
             _detailRow('Applied', _formatDate(_application.appliedAt)),
             const SizedBox(height: 10),
             _detailRow('Last updated', _formatDate(_application.updatedAt)),
+            if (_application.userDetails?.hasAny ?? false) ...[
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Your details',
+                      style: AppTextStyles.featureTitle.copyWith(fontSize: 14),
+                    ),
+                  ),
+                  if (_canEditDetails)
+                    TextButton(
+                      onPressed: _openDetailsEdit,
+                      child: Text(
+                        _application.userDetails!.hasAny
+                            ? 'Edit details'
+                            : 'Add details',
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              if (_application.userDetails?.location != null) ...[
+                _detailRow('Location', _application.userDetails!.location!),
+                const SizedBox(height: 8),
+              ],
+              if (_application.userDetails?.salary != null) ...[
+                _detailRow(
+                  'Salary',
+                  formatSalaryDisplay(_application.userDetails!.salary!),
+                ),
+                const SizedBox(height: 8),
+              ],
+              if (_application.userDetails?.numberOfRounds != null) ...[
+                _detailRow(
+                  'Rounds',
+                  '${_application.userDetails!.numberOfRounds}',
+                ),
+                const SizedBox(height: 8),
+              ],
+              if (_application.userDetails?.workMode != null) ...[
+                _detailRow(
+                  'Work mode',
+                  _formatWorkMode(_application.userDetails!.workMode!),
+                ),
+                const SizedBox(height: 8),
+              ],
+              if (_application.userDetails?.notes != null)
+                _detailRow('Notes', _application.userDetails!.notes!),
+            ] else if (_canEditDetails) ...[
+              const SizedBox(height: 16),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: _openDetailsEdit,
+                  child: const Text('Add details'),
+                ),
+              ),
+            ],
             if (_hasExtractedDetails(_application.extractedDetails)) ...[
               const SizedBox(height: 20),
               Text(
@@ -174,7 +266,10 @@ class _ApplicationDetailSheetState extends State<ApplicationDetailSheet> {
                 const SizedBox(height: 8),
               ],
               if (_application.extractedDetails?.salary != null) ...[
-                _detailRow('Salary', _application.extractedDetails!.salary!),
+                _detailRow(
+                  'Salary',
+                  formatSalaryDisplay(_application.extractedDetails!.salary!),
+                ),
                 const SizedBox(height: 8),
               ],
               if (_application.extractedDetails?.location != null) ...[
@@ -190,66 +285,70 @@ class _ApplicationDetailSheetState extends State<ApplicationDetailSheet> {
                   _application.extractedDetails!.employmentType!,
                 ),
             ],
-            const SizedBox(height: 20),
-            Text(
-              'Status history',
-              style: AppTextStyles.featureTitle.copyWith(fontSize: 14),
-            ),
-            const SizedBox(height: 12),
-            if (_loading)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 24),
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else if (_error != null)
-              Text(_error!, style: AppTextStyles.darkSubtitle)
-            else
-              Flexible(
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _StatusHistoryTimeline(
-                        entries: _detail?.statusHistory ?? const [],
-                      ),
-                      if ((_detail?.companyApplications?.length ?? 0) > 1) ...[
-                        const SizedBox(height: 20),
-                        Text(
-                          'At this company',
-                          style:
-                              AppTextStyles.featureTitle.copyWith(fontSize: 14),
+            if (widget.showStatusHistory) ...[
+              const SizedBox(height: 20),
+              Text(
+                'Status history',
+                style: AppTextStyles.featureTitle.copyWith(fontSize: 14),
+              ),
+              const SizedBox(height: 12),
+              if (_loading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (_error != null)
+                Text(_error!, style: AppTextStyles.darkSubtitle)
+              else
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _StatusHistoryTimeline(
+                          entries: _detail?.statusHistory ?? const [],
                         ),
-                        const SizedBox(height: 8),
-                        ..._detail!.companyApplications!.map(
-                          (sibling) => Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    sibling.role ?? 'Unknown role',
-                                    style: AppTextStyles.darkSubtitle
-                                        .copyWith(fontSize: 13),
-                                  ),
-                                ),
-                                Text(
-                                  formatStatusLabel(sibling.status),
-                                  style: AppTextStyles.darkStatCaption,
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  _formatShortDate(sibling.appliedAt),
-                                  style: AppTextStyles.darkStatCaption,
-                                ),
-                              ],
+                        if ((_detail?.companyApplications?.length ?? 0) >
+                            1) ...[
+                          const SizedBox(height: 20),
+                          Text(
+                            'At this company',
+                            style: AppTextStyles.featureTitle.copyWith(
+                              fontSize: 14,
                             ),
                           ),
-                        ),
+                          const SizedBox(height: 8),
+                          ..._detail!.companyApplications!.map(
+                            (sibling) => Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      sibling.role ?? 'Unknown role',
+                                      style: AppTextStyles.darkSubtitle
+                                          .copyWith(fontSize: 13),
+                                    ),
+                                  ),
+                                  Text(
+                                    formatStatusLabel(sibling.status),
+                                    style: AppTextStyles.darkStatCaption,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    _formatShortDate(sibling.appliedAt),
+                                    style: AppTextStyles.darkStatCaption,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
-              ),
+            ],
             const SizedBox(height: 16),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(),
@@ -305,6 +404,11 @@ class _ApplicationDetailSheetState extends State<ApplicationDetailSheet> {
         details.salary != null ||
         details.location != null ||
         details.employmentType != null;
+  }
+
+  String _formatWorkMode(String mode) {
+    if (mode.isEmpty) return mode;
+    return mode[0].toUpperCase() + mode.substring(1);
   }
 }
 

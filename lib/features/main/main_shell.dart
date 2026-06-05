@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../../core/app_sync_state.dart';
 import '../../core/auth/auth_state.dart';
+import '../../core/notifications/app_notification_service.dart';
+import '../../core/notifications/auto_sync_monitor.dart';
 import '../../core/theme/app_colors.dart';
 import '../account/account_screen.dart';
 import '../login/login_screen.dart';
@@ -16,7 +18,7 @@ class MainShell extends StatefulWidget {
   State<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends State<MainShell> {
+class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   int _currentIndex = 0;
 
   static const _tabs = [
@@ -29,7 +31,8 @@ class _MainShellState extends State<MainShell> {
   @override
   void initState() {
     super.initState();
-    unawaited(AppSyncState.instance.refreshProfile());
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(_bootstrap());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!AuthState.instance.isAuthenticated && mounted) {
         Navigator.of(context).pushAndRemoveUntil(
@@ -38,6 +41,28 @@ class _MainShellState extends State<MainShell> {
         );
       }
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(AutoSyncMonitor.instance.onAppResumed());
+    }
+  }
+
+  Future<void> _bootstrap() async {
+    await AppNotificationService.instance.initialize();
+    await AppSyncState.instance.refreshProfile();
+    AutoSyncMonitor.instance.bind(AppSyncState.instance);
+    if (AppSyncState.instance.autoSyncEnabled) {
+      await AppNotificationService.instance.requestPermission();
+    }
   }
 
   @override

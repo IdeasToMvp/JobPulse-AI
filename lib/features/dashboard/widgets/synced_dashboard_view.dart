@@ -120,23 +120,6 @@ class _DashboardContent extends StatelessWidget {
                 ),
               ],
             ),
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                IconButton(
-                  onPressed: () {},
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(
-                    minWidth: 40,
-                    minHeight: 40,
-                  ),
-                  icon: const Icon(
-                    Icons.notifications_outlined,
-                    color: AppColors.onboardingTitle,
-                  ),
-                ),
-              ],
-            ),
           ],
         ),
         const SizedBox(height: 14),

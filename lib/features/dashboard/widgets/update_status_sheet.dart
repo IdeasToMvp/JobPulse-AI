@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'active_details_sheet.dart';
 import '../../../core/api/user_api.dart';
 import '../../../core/app_sync_state.dart';
 import '../../../core/auth/auth_service.dart';
@@ -74,6 +75,17 @@ class _UpdateStatusSheetState extends State<UpdateStatusSheet> {
     );
 
     if (confirmed != true || !mounted) return;
+
+    if (status == 'active' && widget.application.status != 'active') {
+      await ActiveDetailsSheet.show(
+        context,
+        application: widget.application,
+        onUpdated: (detail) {
+          widget.onUpdated?.call(detail);
+        },
+      );
+      return;
+    }
 
     setState(() {
       _submitting = true;

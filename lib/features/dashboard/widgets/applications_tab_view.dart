@@ -287,23 +287,16 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
                                       ),
                                     ],
                                     const SizedBox(height: 6),
-                                    if (app.extractedDetails?.salary != null ||
-                                        app.extractedDetails?.location !=
-                                            null) ...[
+                                    if (displaySalary(app) != null ||
+                                        displayLocation(app) != null) ...[
                                       Wrap(
                                         spacing: 6,
                                         runSpacing: 4,
                                         children: [
-                                          if (app.extractedDetails?.salary !=
-                                              null)
-                                            _infoChip(
-                                              app.extractedDetails!.salary!,
-                                            ),
-                                          if (app.extractedDetails?.location !=
-                                              null)
-                                            _infoChip(
-                                              app.extractedDetails!.location!,
-                                            ),
+                                          if (displaySalary(app) != null)
+                                            _infoChip(displaySalary(app)!),
+                                          if (displayLocation(app) != null)
+                                            _infoChip(displayLocation(app)!),
                                         ],
                                       ),
                                       const SizedBox(height: 6),

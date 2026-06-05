@@ -26,6 +26,7 @@ class SyncScanMeta {
     required this.fromDate,
     required this.toDate,
     this.newMessages = 0,
+    this.newApplications = 0,
     this.skippedProcessed = 0,
     this.aiCalls = 0,
     this.companiesDiscovered = 0,
@@ -36,6 +37,7 @@ class SyncScanMeta {
   final String fromDate;
   final String toDate;
   final int newMessages;
+  final int newApplications;
   final int skippedProcessed;
   final int aiCalls;
   final int companiesDiscovered;
@@ -47,6 +49,7 @@ class SyncScanMeta {
       fromDate: json['fromDate'] as String? ?? '',
       toDate: json['toDate'] as String? ?? '',
       newMessages: json['newMessages'] as int? ?? 0,
+      newApplications: json['newApplications'] as int? ?? 0,
       skippedProcessed: json['skippedProcessed'] as int? ?? 0,
       aiCalls: json['aiCalls'] as int? ?? 0,
       companiesDiscovered: json['companiesDiscovered'] as int? ?? 0,

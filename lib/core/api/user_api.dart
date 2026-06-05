@@ -337,13 +337,19 @@ class UserApi {
 
   Future<UpdateApplicationStatusResult> updateApplicationStatus(
     String id,
-    String status,
-  ) async {
+    String status, {
+    ApplicationUserDetails? details,
+  }) async {
     final token = await _token();
+    final payload = <String, dynamic>{'status': status};
+    if (details != null && details.hasAny) {
+      payload['details'] = details.toJson();
+    }
+
     final response = await http.patch(
       Uri.parse('${AppConfig.apiBaseUrl}/applications/$id/status'),
       headers: _headers(token),
-      body: jsonEncode({'status': status}),
+      body: jsonEncode(payload),
     );
 
     if (response.statusCode == 400) {
@@ -364,6 +370,37 @@ class UserApi {
 
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return UpdateApplicationStatusResult.fromJson(body);
+  }
+
+  Future<UpdateApplicationDetailsResult> updateApplicationDetails(
+    String id,
+    ApplicationUserDetails details,
+  ) async {
+    final token = await _token();
+    final response = await http.patch(
+      Uri.parse('${AppConfig.apiBaseUrl}/applications/$id/details'),
+      headers: _headers(token),
+      body: jsonEncode({'details': details.toPatchJson()}),
+    );
+
+    if (response.statusCode == 400) {
+      final body = jsonDecode(response.body) as Map<String, dynamic>?;
+      final message = body?['message'];
+      throw AuthException(
+        message is List
+            ? message.join(', ')
+            : (message as String? ?? 'Invalid details update'),
+      );
+    }
+    if (response.statusCode == 404) {
+      throw AuthException('Application not found');
+    }
+    if (response.statusCode != 200) {
+      throw AuthException('Failed to update details');
+    }
+
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return UpdateApplicationDetailsResult.fromJson(body);
   }
 
   Future<ActivityPage> fetchActivities({

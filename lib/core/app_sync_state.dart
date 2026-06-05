@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'api/sync_cancelled_exception.dart';
 import 'api/user_api.dart';
 import 'models/user_profile.dart';
+import 'notifications/auto_sync_monitor.dart';
 
 enum SyncButtonState { idle, syncing, success }
 
@@ -229,6 +230,11 @@ class AppSyncState extends ChangeNotifier {
   Future<void> persistAutoSync(bool value) async {
     setAutoSync(value);
     await saveSyncSettings();
+    if (value) {
+      await AutoSyncMonitor.instance.onAutoSyncEnabled();
+    } else {
+      await AutoSyncMonitor.instance.onAutoSyncDisabled();
+    }
   }
 
   void setSyncFrequency(SyncFrequency value) {
@@ -374,6 +380,50 @@ class AppSyncState extends ChangeNotifier {
   }
 
   Future<void> runIncrementalSync() => runSync(incrementalOnly: true);
+
+  /// Silent incremental sync for auto-sync notifications. Does not change UI
+  /// sync state. Returns count of newly detected applications.
+  Future<int> runBackgroundIncrementalSync() async {
+    if (syncButtonState == SyncButtonState.syncing) return 0;
+
+    await UserApi.instance.beginSyncSession();
+
+    try {
+      final platformResult = await UserApi.instance.runPlatformSync(
+        incrementalOnly: true,
+      );
+      UserApi.instance.ensureSyncNotAborted();
+
+      final companyResult = await UserApi.instance.runCompanySync(
+        incrementalOnly: true,
+      );
+      UserApi.instance.ensureSyncNotAborted();
+
+      final result = await UserApi.instance.finalizeSync(
+        fromDate: platformResult.fromDate,
+        toDate: platformResult.toDate,
+        maxInternalDate: platformResult.maxInternalDate,
+        newMessages: platformResult.newMessages,
+        skippedProcessed:
+            platformResult.skippedProcessed + companyResult.skippedProcessed,
+        aiCalls: platformResult.aiCalls + companyResult.aiCalls,
+        companyEmailsProcessed: companyResult.companyEmailsProcessed,
+        companiesDiscovered: platformResult.companiesDiscovered,
+        companiesScanned: companyResult.companiesScanned,
+      );
+
+      sync = result;
+      bumpFeedRevision();
+      notifyListeners();
+      return result.scan?.newApplications ?? 0;
+    } on SyncCancelledException {
+      return 0;
+    } catch (_) {
+      return 0;
+    } finally {
+      UserApi.instance.endSyncSession();
+    }
+  }
 
   Future<void> cancelSync() async {
     if (syncButtonState != SyncButtonState.syncing) return;

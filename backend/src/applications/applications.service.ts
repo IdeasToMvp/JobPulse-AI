@@ -22,7 +22,13 @@ import {
   StatusHistorySource,
   SyncResultResponse,
 } from './application.entity';
+import { ApplicationUserDetailsDto } from './dto/application-user-details.dto';
 import { ManualApplicationStatus } from './dto/update-application-status.dto';
+import {
+  mergeUserDetails,
+  parseUserDetails,
+  userDetailsToDb,
+} from './user-details.util';
 import { normalizeCompanyKey, rolesOverlap } from '../sync/company-name.util';
 import { formatIsoDate } from '../sync/platform-filters';
 
@@ -318,6 +324,7 @@ export class ApplicationsService {
     userId: string,
     applicationId: string,
     status: ManualApplicationStatus,
+    details?: ApplicationUserDetailsDto,
   ): Promise<{
     application: ApplicationDetailResponse;
     previousStatus: ApplicationStatus;
@@ -332,10 +339,16 @@ export class ApplicationsService {
 
     const previousStatus = app.status;
     const now = new Date();
+    const updatePayload: Record<string, unknown> = { status };
+
+    if (details) {
+      const merged = mergeUserDetails(app.userDetails, details, now.toISOString());
+      updatePayload.user_details = userDetailsToDb(merged);
+    }
 
     const { data, error } = await this.supabase.db
       .from('applications')
-      .update({ status })
+      .update(updatePayload)
       .eq('id', applicationId)
       .eq('user_id', userId)
       .select('*')
@@ -370,6 +383,37 @@ export class ApplicationsService {
       previousStatus,
       totals,
       lastSyncedAt: (userRow?.last_synced_at as string) ?? null,
+    };
+  }
+
+  async updateUserDetailsManually(
+    userId: string,
+    applicationId: string,
+    details: ApplicationUserDetailsDto,
+  ): Promise<ApplicationDetailResponse> {
+    const app = await this.findByIdForUser(userId, applicationId);
+    if (!app) throw new NotFoundException('Application not found');
+
+    const now = new Date();
+    const merged = mergeUserDetails(app.userDetails, details, now.toISOString());
+
+    const { data, error } = await this.supabase.db
+      .from('applications')
+      .update({ user_details: userDetailsToDb(merged) })
+      .eq('id', applicationId)
+      .eq('user_id', userId)
+      .select('*')
+      .single();
+
+    if (error) this.raise('updateUserDetailsManually', error);
+
+    const updated = this.mapApplication(data as DbApplicationRow);
+    const statusHistory = await this.getStatusHistory(userId, updated);
+
+    return {
+      ...this.toListItem(updated),
+      statusHistory,
+      companyApplications: await this.listCompanyApplications(userId, updated),
     };
   }
 
@@ -447,6 +491,7 @@ export class ApplicationsService {
       lastMessageAt: app.lastMessageAt?.toISOString(),
       updatedAt: app.updatedAt.toISOString(),
       extractedDetails: app.extractedDetails,
+      userDetails: app.userDetails,
     };
   }
 
@@ -798,6 +843,7 @@ export class ApplicationsService {
       role: row.role ?? undefined,
       status: row.status as ApplicationStatus,
       extractedDetails: this.parseExtractedDetails(row.extracted_details),
+      userDetails: parseUserDetails(row.user_details),
       lastMessageId: row.last_message_id ?? undefined,
       lastMessageAt: row.last_message_at
         ? new Date(row.last_message_at)

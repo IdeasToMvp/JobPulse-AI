@@ -21,6 +21,17 @@ export interface ApplicationExtractedDetails {
   confidence?: number;
 }
 
+export type UserWorkMode = 'remote' | 'hybrid' | 'onsite';
+
+export interface ApplicationUserDetails {
+  location?: string;
+  salary?: string;
+  numberOfRounds?: number;
+  workMode?: UserWorkMode;
+  notes?: string;
+  updatedAt?: string;
+}
+
 export interface CompanyApplicationSummary {
   id: string;
   role?: string;
@@ -39,6 +50,7 @@ export interface ApplicationRecord {
   role?: string;
   status: ApplicationStatus;
   extractedDetails?: ApplicationExtractedDetails;
+  userDetails?: ApplicationUserDetails;
   lastMessageId?: string;
   lastMessageAt?: Date;
   createdAt: Date;
@@ -71,6 +83,7 @@ export interface SyncScanMeta {
   fromDate: string;
   toDate: string;
   newMessages: number;
+  newApplications?: number;
   skippedProcessed: number;
   aiCalls: number;
   companiesDiscovered?: number;
@@ -103,6 +116,7 @@ export interface ApplicationListItem {
   lastMessageAt?: string;
   updatedAt: string;
   extractedDetails?: ApplicationExtractedDetails;
+  userDetails?: ApplicationUserDetails;
   companyApplyCount?: number;
   companyRoles?: string[];
 }
@@ -149,6 +163,7 @@ export interface DbApplicationRow {
   last_message_id: string | null;
   last_message_at: string | null;
   extracted_details: Record<string, unknown> | null;
+  user_details: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 }

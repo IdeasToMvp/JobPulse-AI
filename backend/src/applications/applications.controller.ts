@@ -14,6 +14,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ActivitiesService } from '../activities/activities.service';
 import { ApplicationsService } from './applications.service';
 import { UpdateApplicationStatusDto } from './dto/update-application-status.dto';
+import { UpdateApplicationDetailsDto } from './dto/update-application-details.dto';
 
 @Controller('applications')
 @UseGuards(JwtAuthGuard)
@@ -45,6 +46,7 @@ export class ApplicationsController {
       userId,
       id,
       body.status,
+      body.details,
     );
 
     await this.activities.recordStatusUpdate({
@@ -73,5 +75,20 @@ export class ApplicationsController {
         hasSynced: result.lastSyncedAt != null,
       },
     };
+  }
+
+  @Patch(':id/details')
+  async updateDetails(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: UpdateApplicationDetailsDto,
+  ) {
+    const application = await this.applications.updateUserDetailsManually(
+      req.user!.sub,
+      id,
+      body.details,
+    );
+
+    return { application };
   }
 }

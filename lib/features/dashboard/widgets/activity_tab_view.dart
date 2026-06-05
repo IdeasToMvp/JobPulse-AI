@@ -150,7 +150,11 @@ class _ActivityTabViewState extends State<ActivityTabView> {
     if (appId == null) return;
     final application = _applicationsById[appId];
     if (application == null) return;
-    ApplicationDetailSheet.show(context, application);
+    ApplicationDetailSheet.show(
+      context,
+      application,
+      showStatusHistory: true,
+    );
   }
 
   String get _emptyMessage {
