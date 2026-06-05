@@ -1,6 +1,12 @@
-import { Injectable } from '@nestjs/common';
-import { randomUUID } from 'crypto';
-import { UserRecord } from './user.entity';
+import {
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
+import { GMAIL_SCOPES } from '../auth/google-scopes';
+import { TokenEncryptionService } from '../common/crypto/token-encryption.service';
+import { SupabaseService } from '../supabase/supabase.service';
+import { DbOAuthRow, DbUserRow, UserRecord } from './user.entity';
 
 export interface UpsertGoogleUserInput {
   googleId: string;
@@ -14,70 +20,150 @@ export interface UpsertGoogleUserInput {
 
 @Injectable()
 export class UsersService {
-  private readonly users = new Map<string, UserRecord>();
-  private readonly byGoogleId = new Map<string, string>();
-  private readonly byEmail = new Map<string, string>();
+  private readonly logger = new Logger(UsersService.name);
 
-  findById(id: string): UserRecord | undefined {
-    return this.users.get(id);
+  constructor(
+    private readonly supabase: SupabaseService,
+    private readonly encryption: TokenEncryptionService,
+  ) {}
+
+  async findById(id: string): Promise<UserRecord | null> {
+    const { data, error } = await this.supabase.db
+      .from('users')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error) this.raiseDbError('findById', error);
+    return data ? this.mapUser(data as DbUserRow) : null;
   }
 
-  findByGoogleId(googleId: string): UserRecord | undefined {
-    const id = this.byGoogleId.get(googleId);
-    return id ? this.users.get(id) : undefined;
+  async findByGoogleId(googleId: string): Promise<UserRecord | null> {
+    const { data, error } = await this.supabase.db
+      .from('users')
+      .select('*')
+      .eq('google_id', googleId)
+      .maybeSingle();
+
+    if (error) this.raiseDbError('findByGoogleId', error);
+    return data ? this.mapUser(data as DbUserRow) : null;
   }
 
-  upsertGoogleUser(input: UpsertGoogleUserInput): UserRecord {
-    const existingId = this.byGoogleId.get(input.googleId);
-    const now = new Date();
+  async upsertGoogleUser(input: UpsertGoogleUserInput): Promise<UserRecord> {
+    const existing = await this.findByGoogleId(input.googleId);
+    const user = existing
+      ? await this.updateUser(existing.id, input)
+      : await this.insertUser(input);
 
-    if (existingId) {
-      const existing = this.users.get(existingId)!;
-      const updated: UserRecord = {
-        ...existing,
+    await this.upsertOAuthCredentials(user.id, input);
+    return user;
+  }
+
+  async clearOAuthCredentials(userId: string): Promise<void> {
+    const { error } = await this.supabase.db
+      .from('oauth_credentials')
+      .delete()
+      .eq('user_id', userId);
+
+    if (error) this.raiseDbError('clearOAuthCredentials', error);
+  }
+
+  private async insertUser(input: UpsertGoogleUserInput): Promise<UserRecord> {
+    const { data, error } = await this.supabase.db
+      .from('users')
+      .insert({
+        google_id: input.googleId,
         email: input.email,
         name: input.name,
-        picture: input.picture ?? existing.picture,
-        refreshToken: input.refreshToken ?? existing.refreshToken,
-        accessToken: input.accessToken ?? existing.accessToken,
-        accessTokenExpiresAt:
-          input.accessTokenExpiresAt ?? existing.accessTokenExpiresAt,
-        updatedAt: now,
-      };
-      this.users.set(existingId, updated);
-      this.byEmail.set(input.email, existingId);
-      return updated;
-    }
+        picture: input.picture ?? null,
+      })
+      .select('*')
+      .single();
 
-    const id = randomUUID();
-    const created: UserRecord = {
-      id,
-      googleId: input.googleId,
-      email: input.email,
-      name: input.name,
-      picture: input.picture,
-      refreshToken: input.refreshToken,
-      accessToken: input.accessToken,
-      accessTokenExpiresAt: input.accessTokenExpiresAt,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    this.users.set(id, created);
-    this.byGoogleId.set(input.googleId, id);
-    this.byEmail.set(input.email, id);
-    return created;
+    if (error) this.raiseDbError('insertUser', error);
+    return this.mapUser(data as DbUserRow);
   }
 
-  clearRefreshToken(userId: string): void {
-    const user = this.users.get(userId);
-    if (!user) return;
-    this.users.set(userId, {
-      ...user,
-      refreshToken: undefined,
-      accessToken: undefined,
-      accessTokenExpiresAt: undefined,
-      updatedAt: new Date(),
-    });
+  private async updateUser(
+    id: string,
+    input: UpsertGoogleUserInput,
+  ): Promise<UserRecord> {
+    const { data, error } = await this.supabase.db
+      .from('users')
+      .update({
+        email: input.email,
+        name: input.name,
+        picture: input.picture ?? null,
+      })
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) this.raiseDbError('updateUser', error);
+    return this.mapUser(data as DbUserRow);
+  }
+
+  private async upsertOAuthCredentials(
+    userId: string,
+    input: UpsertGoogleUserInput,
+  ): Promise<void> {
+    const { data: existing, error: fetchError } = await this.supabase.db
+      .from('oauth_credentials')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (fetchError) this.raiseDbError('fetchOAuthCredentials', fetchError);
+
+    const payload: Record<string, unknown> = {
+      user_id: userId,
+      provider: 'google',
+      scopes: [...GMAIL_SCOPES],
+    };
+
+    if (input.accessToken) {
+      payload.access_token_encrypted = this.encryption.encrypt(
+        input.accessToken,
+      );
+      payload.access_token_expires_at =
+        input.accessTokenExpiresAt?.toISOString() ?? null;
+    }
+
+    if (input.refreshToken) {
+      payload.refresh_token_encrypted = this.encryption.encrypt(
+        input.refreshToken,
+      );
+    } else if (existing) {
+      payload.refresh_token_encrypted = (
+        existing as DbOAuthRow
+      ).refresh_token_encrypted;
+    }
+
+    if (!existing && !input.refreshToken && !input.accessToken) {
+      return;
+    }
+
+    const { error } = await this.supabase.db
+      .from('oauth_credentials')
+      .upsert(payload, { onConflict: 'user_id' });
+
+    if (error) this.raiseDbError('upsertOAuthCredentials', error);
+  }
+
+  private mapUser(row: DbUserRow): UserRecord {
+    return {
+      id: row.id,
+      googleId: row.google_id,
+      email: row.email,
+      name: row.name,
+      picture: row.picture ?? undefined,
+      createdAt: new Date(row.created_at),
+      updatedAt: new Date(row.updated_at),
+    };
+  }
+
+  private raiseDbError(operation: string, error: { message: string }): never {
+    this.logger.error(`${operation} failed: ${error.message}`);
+    throw new InternalServerErrorException('Database operation failed');
   }
 }

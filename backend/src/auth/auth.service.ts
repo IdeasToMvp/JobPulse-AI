@@ -44,7 +44,7 @@ export class AuthService {
       redirectUri,
     );
 
-    const user = this.users.upsertGoogleUser({
+    const user = await this.users.upsertGoogleUser({
       googleId: profile.googleId,
       email: profile.email,
       name: profile.name,
@@ -61,7 +61,7 @@ export class AuthService {
 
   async loginWithGoogleIdToken(idToken: string): Promise<AuthTokensResponse> {
     const profile = await this.googleOAuth.verifyIdToken(idToken);
-    const user = this.users.upsertGoogleUser({
+    const user = await this.users.upsertGoogleUser({
       googleId: profile.googleId,
       email: profile.email,
       name: profile.name,
@@ -72,13 +72,13 @@ export class AuthService {
   }
 
   async getProfile(userId: string) {
-    const user = this.users.findById(userId);
+    const user = await this.users.findById(userId);
     if (!user) return null;
     return this.toPublicUser(user);
   }
 
   async logout(userId: string): Promise<void> {
-    this.users.clearRefreshToken(userId);
+    await this.users.clearOAuthCredentials(userId);
   }
 
   private issueSession(user: UserRecord): AuthTokensResponse {

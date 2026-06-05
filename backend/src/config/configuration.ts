@@ -1,5 +1,6 @@
 export default () => ({
   port: parseInt(process.env.PORT ?? '3000', 10),
+  nodeEnv: process.env.NODE_ENV ?? 'development',
   appUrl: process.env.APP_URL ?? 'http://localhost:3000',
   mobileRedirectUri:
     process.env.MOBILE_REDIRECT_URI ?? 'jobpulse://auth/callback',
@@ -14,4 +15,13 @@ export default () => ({
       process.env.GOOGLE_REDIRECT_URI ??
       'http://localhost:3000/api/v1/auth/google/callback',
   },
+  supabase: {
+    url: process.env.SUPABASE_URL ?? '',
+    serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? '',
+  },
+  tokenEncryptionKey: process.env.TOKEN_ENCRYPTION_KEY ?? '',
+  corsOrigins: (process.env.CORS_ORIGINS ?? '')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean),
 });

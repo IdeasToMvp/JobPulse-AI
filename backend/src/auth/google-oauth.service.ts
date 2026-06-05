@@ -7,12 +7,9 @@ import { ConfigService } from '@nestjs/config';
 import { OAuth2Client, TokenPayload } from 'google-auth-library';
 import { randomBytes } from 'crypto';
 
-export const GMAIL_SCOPES = [
-  'openid',
-  'email',
-  'profile',
-  'https://www.googleapis.com/auth/gmail.readonly',
-];
+import { GMAIL_SCOPES } from './google-scopes';
+
+export { GMAIL_SCOPES };
 
 export interface GoogleTokenResponse {
   accessToken: string;
