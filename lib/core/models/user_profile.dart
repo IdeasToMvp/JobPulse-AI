@@ -28,6 +28,9 @@ class SyncScanMeta {
     this.newMessages = 0,
     this.skippedProcessed = 0,
     this.aiCalls = 0,
+    this.companiesDiscovered = 0,
+    this.companyEmailsProcessed = 0,
+    this.companiesScanned = 0,
   });
 
   final String fromDate;
@@ -35,6 +38,9 @@ class SyncScanMeta {
   final int newMessages;
   final int skippedProcessed;
   final int aiCalls;
+  final int companiesDiscovered;
+  final int companyEmailsProcessed;
+  final int companiesScanned;
 
   factory SyncScanMeta.fromJson(Map<String, dynamic> json) {
     return SyncScanMeta(
@@ -43,6 +49,9 @@ class SyncScanMeta {
       newMessages: json['newMessages'] as int? ?? 0,
       skippedProcessed: json['skippedProcessed'] as int? ?? 0,
       aiCalls: json['aiCalls'] as int? ?? 0,
+      companiesDiscovered: json['companiesDiscovered'] as int? ?? 0,
+      companyEmailsProcessed: json['companyEmailsProcessed'] as int? ?? 0,
+      companiesScanned: json['companiesScanned'] as int? ?? 0,
     );
   }
 }

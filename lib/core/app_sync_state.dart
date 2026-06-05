@@ -6,6 +6,16 @@ import 'models/user_profile.dart';
 
 enum SyncButtonState { idle, syncing, success }
 
+enum SyncStep {
+  idle,
+  connecting,
+  scanningPlatforms,
+  discoveringCompanies,
+  searchingCompanyEmails,
+  finalizing,
+  complete,
+}
+
 enum SyncFrequency {
   every15Minutes('Every 15 Minutes', 15),
   every30Minutes('Every 30 Minutes', 30),
@@ -26,6 +36,8 @@ class AppSyncState extends ChangeNotifier {
 
   bool isGmailSynced = false;
   SyncButtonState syncButtonState = SyncButtonState.idle;
+  SyncStep syncStep = SyncStep.idle;
+  String? syncStepDetail;
 
   String userName = '';
   String userEmail = '';
@@ -57,6 +69,30 @@ class AppSyncState extends ChangeNotifier {
 
   int get emailsProcessed => sync.emailsProcessed;
   int get applicationsFound => sync.applicationsCount;
+
+  int get syncProgressStepIndex {
+    switch (syncStep) {
+      case SyncStep.connecting:
+        return 0;
+      case SyncStep.scanningPlatforms:
+        return 1;
+      case SyncStep.discoveringCompanies:
+        return 2;
+      case SyncStep.searchingCompanyEmails:
+        return 3;
+      case SyncStep.finalizing:
+      case SyncStep.complete:
+        return 4;
+      case SyncStep.idle:
+        return 0;
+    }
+  }
+
+  double get syncProgressFraction {
+    if (syncStep == SyncStep.complete) return 1;
+    if (syncStep == SyncStep.idle) return 0;
+    return (syncProgressStepIndex + 0.5) / 5;
+  }
 
   String get nextScheduledSyncLabel {
     if (!autoSyncEnabled || syncFrequency == SyncFrequency.manual) {
@@ -98,6 +134,8 @@ class AppSyncState extends ChangeNotifier {
   void disconnectGmail() {
     isGmailSynced = false;
     syncButtonState = SyncButtonState.idle;
+    syncStep = SyncStep.idle;
+    syncStepDetail = null;
     userName = '';
     userEmail = '';
     memberSince = '';
@@ -131,36 +169,97 @@ class AppSyncState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _setSyncStep(SyncStep step, {String? detail}) {
+    syncStep = step;
+    syncStepDetail = detail;
+    notifyListeners();
+  }
+
   Future<void> runSync({DateTime? fromDate, DateTime? toDate}) async {
     if (syncButtonState == SyncButtonState.syncing) return;
     syncButtonState = SyncButtonState.syncing;
-    notifyListeners();
+    _setSyncStep(SyncStep.connecting, detail: 'Verifying secure access');
+
+    await UserApi.instance.beginSyncSession();
 
     try {
-      final result = await UserApi.instance.runSync(
+      _setSyncStep(
+        SyncStep.scanningPlatforms,
+        detail: 'LinkedIn, Naukri, Indeed, and your other sources',
+      );
+      final platformResult = await UserApi.instance.runPlatformSync(
         fromDate: fromDate,
         toDate: toDate,
       );
+
+      UserApi.instance.ensureSyncNotAborted();
+
+      _setSyncStep(
+        SyncStep.discoveringCompanies,
+        detail: platformResult.companiesDiscovered > 0
+            ? '${platformResult.companiesDiscovered} companies identified'
+            : 'Identifying employers from platform emails',
+      );
+
+      _setSyncStep(
+        SyncStep.searchingCompanyEmails,
+        detail: 'Recruiter replies and company domain mail',
+      );
+      final companyResult = await UserApi.instance.runCompanySync(
+        fromDate: fromDate,
+        toDate: toDate,
+      );
+
+      UserApi.instance.ensureSyncNotAborted();
+
+      if (companyResult.companiesScanned == 0) {
+        syncStepDetail = 'No company domains to search yet';
+        notifyListeners();
+      } else {
+        syncStepDetail =
+            'Scanned ${companyResult.companiesScanned} companies';
+        notifyListeners();
+      }
+
+      _setSyncStep(SyncStep.finalizing, detail: 'Computing stats and updates');
+      final result = await UserApi.instance.finalizeSync(
+        fromDate: platformResult.fromDate,
+        toDate: platformResult.toDate,
+        maxInternalDate: platformResult.maxInternalDate,
+        newMessages: platformResult.newMessages,
+        skippedProcessed:
+            platformResult.skippedProcessed + companyResult.skippedProcessed,
+        aiCalls: platformResult.aiCalls + companyResult.aiCalls,
+        companyEmailsProcessed: companyResult.companyEmailsProcessed,
+        companiesDiscovered: platformResult.companiesDiscovered,
+        companiesScanned: companyResult.companiesScanned,
+      );
+
       sync = result;
       if (result.scan != null) {
-        scanRange =
-            '${result.scan!.fromDate} → ${result.scan!.toDate}';
+        scanRange = '${result.scan!.fromDate} → ${result.scan!.toDate}';
       }
       if (kDebugMode) {
         debugPrint(
           'Sync complete → emails: ${result.emailsProcessed}, '
           'apps: ${result.applicationsCount}, '
-          'new: ${result.scan?.newMessages ?? 0}',
+          'companies: ${result.scan?.companiesDiscovered ?? 0}',
         );
       }
+
+      _setSyncStep(SyncStep.complete);
       syncButtonState = SyncButtonState.success;
       notifyListeners();
 
       await Future<void>.delayed(const Duration(milliseconds: 600));
       syncButtonState = SyncButtonState.idle;
+      syncStep = SyncStep.idle;
+      syncStepDetail = null;
       notifyListeners();
     } on SyncCancelledException {
       syncButtonState = SyncButtonState.idle;
+      syncStep = SyncStep.finalizing;
+      syncStepDetail = 'Saving progress…';
       notifyListeners();
       try {
         sync = await UserApi.instance.finalizeSyncStats();
@@ -172,17 +271,23 @@ class AppSyncState extends ChangeNotifier {
           await refreshProfile();
         } catch (_) {}
       }
+      syncStep = SyncStep.idle;
+      syncStepDetail = null;
       notifyListeners();
     } catch (_) {
       syncButtonState = SyncButtonState.idle;
+      syncStep = SyncStep.idle;
+      syncStepDetail = null;
       notifyListeners();
       rethrow;
+    } finally {
+      UserApi.instance.endSyncSession();
     }
   }
 
-  void cancelSync() {
+  Future<void> cancelSync() async {
     if (syncButtonState != SyncButtonState.syncing) return;
-    UserApi.instance.cancelSync();
+    await UserApi.instance.cancelSync();
   }
 
   Future<void> deleteAllData() async {

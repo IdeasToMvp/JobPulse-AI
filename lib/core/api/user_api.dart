@@ -7,6 +7,7 @@ import '../auth/auth_service.dart';
 import '../auth/token_storage.dart';
 import '../config/app_config.dart';
 import '../models/application.dart';
+import '../models/sync_phase_result.dart';
 import '../models/user_profile.dart';
 import 'sync_cancelled_exception.dart';
 
@@ -17,6 +18,7 @@ class UserApi {
 
   http.Client? _syncClient;
   bool _syncCancelRequested = false;
+  bool syncAbortRequested = false;
 
   Future<String> _token() async {
     final token = await TokenStorage.read();
@@ -28,6 +30,77 @@ class UserApi {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
       };
+
+  Map<String, String> _syncDatePayload({
+    DateTime? fromDate,
+    DateTime? toDate,
+  }) {
+    final payload = <String, String>{};
+    if (fromDate != null) {
+      payload['fromDate'] = fromDate.toIso8601String().substring(0, 10);
+    }
+    if (toDate != null) {
+      payload['toDate'] = toDate.toIso8601String().substring(0, 10);
+    }
+    return payload;
+  }
+
+  Future<Map<String, dynamic>> _postSync(
+    String path, {
+    Map<String, dynamic>? body,
+  }) async {
+    final token = await _token();
+    final client = _syncClient ??= http.Client();
+
+    try {
+      final response = await client.post(
+        Uri.parse('${AppConfig.apiBaseUrl}$path'),
+        headers: _headers(token),
+        body: jsonEncode(body ?? {}),
+      );
+
+      if (response.statusCode == 409) {
+        throw SyncCancelledException();
+      }
+
+      if (response.statusCode != 200) {
+        throw AuthException('Sync failed');
+      }
+
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    } on Exception catch (e) {
+      if (_syncCancelRequested) {
+        throw SyncCancelledException();
+      }
+      if (e is AuthException || e is SyncCancelledException) rethrow;
+      if (e is http.ClientException || e is SocketException) {
+        throw AuthException('Sync interrupted. Check your connection.');
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> beginSyncSession() async {
+    syncAbortRequested = false;
+    _syncCancelRequested = false;
+    _syncClient?.close();
+    _syncClient = http.Client();
+
+    try {
+      final token = await _token();
+      await http.post(
+        Uri.parse('${AppConfig.apiBaseUrl}/sync/begin'),
+        headers: _headers(token),
+      );
+    } catch (_) {}
+  }
+
+  void endSyncSession() {
+    _syncClient?.close();
+    _syncClient = null;
+    _syncCancelRequested = false;
+    syncAbortRequested = false;
+  }
 
   Future<UserProfile> fetchProfile() async {
     final token = await _token();
@@ -64,59 +137,93 @@ class UserApi {
     return UserProfile.fromJson(userJson);
   }
 
+  Future<PlatformSyncResult> runPlatformSync({
+    DateTime? fromDate,
+    DateTime? toDate,
+  }) async {
+    final body = await _postSync(
+      '/sync/platform',
+      body: _syncDatePayload(fromDate: fromDate, toDate: toDate),
+    );
+    return PlatformSyncResult.fromJson(body);
+  }
+
+  Future<CompanySyncResult> runCompanySync({
+    DateTime? fromDate,
+    DateTime? toDate,
+  }) async {
+    final body = await _postSync(
+      '/sync/companies',
+      body: _syncDatePayload(fromDate: fromDate, toDate: toDate),
+    );
+    return CompanySyncResult.fromJson(body);
+  }
+
+  Future<UserSyncState> finalizeSync({
+    required String fromDate,
+    required String toDate,
+    String? maxInternalDate,
+    int newMessages = 0,
+    int skippedProcessed = 0,
+    int aiCalls = 0,
+    int companyEmailsProcessed = 0,
+    int companiesDiscovered = 0,
+    int companiesScanned = 0,
+  }) async {
+    final body = await _postSync(
+      '/sync/finalize',
+      body: {
+        'fromDate': fromDate,
+        'toDate': toDate,
+        'maxInternalDate': ?maxInternalDate,
+        'newMessages': newMessages,
+        'skippedProcessed': skippedProcessed,
+        'aiCalls': aiCalls,
+        'companyEmailsProcessed': companyEmailsProcessed,
+        'companiesDiscovered': companiesDiscovered,
+        'companiesScanned': companiesScanned,
+      },
+    );
+    return UserSyncState.fromJson(body);
+  }
+
   Future<UserSyncState> runSync({
     DateTime? fromDate,
     DateTime? toDate,
   }) async {
-    cancelSync(requested: false);
-
-    final token = await _token();
-    final payload = <String, String>{};
-    if (fromDate != null) {
-      payload['fromDate'] = fromDate.toIso8601String().substring(0, 10);
-    }
-    if (toDate != null) {
-      payload['toDate'] = toDate.toIso8601String().substring(0, 10);
-    }
-
-    final client = http.Client();
-    _syncClient = client;
-
+    await beginSyncSession();
     try {
-      final response = await client.post(
-        Uri.parse('${AppConfig.apiBaseUrl}/sync'),
-        headers: _headers(token),
-        body: jsonEncode(payload),
+      final body = await _postSync(
+        '/sync',
+        body: _syncDatePayload(fromDate: fromDate, toDate: toDate),
       );
-
-      if (response.statusCode != 200) {
-        throw AuthException('Sync failed');
-      }
-
-      final body = jsonDecode(response.body) as Map<String, dynamic>;
       return UserSyncState.fromJson(body);
-    } on Exception catch (e) {
-      if (_syncCancelRequested) {
-        throw SyncCancelledException();
-      }
-      if (e is AuthException || e is SyncCancelledException) rethrow;
-      if (e is http.ClientException || e is SocketException) {
-        throw AuthException('Sync interrupted. Check your connection.');
-      }
-      rethrow;
     } finally {
-      if (_syncClient == client) {
-        _syncClient = null;
-      }
-      client.close();
-      _syncCancelRequested = false;
+      endSyncSession();
     }
   }
 
-  void cancelSync({bool requested = true}) {
+  Future<void> cancelSync({bool requested = true}) async {
+    if (requested) {
+      syncAbortRequested = true;
+      try {
+        final token = await _token();
+        await http.post(
+          Uri.parse('${AppConfig.apiBaseUrl}/sync/cancel'),
+          headers: _headers(token),
+        );
+      } catch (_) {}
+    }
+
     _syncCancelRequested = requested;
     _syncClient?.close();
     _syncClient = null;
+  }
+
+  void ensureSyncNotAborted() {
+    if (syncAbortRequested) {
+      throw SyncCancelledException();
+    }
   }
 
   Future<List<JobApplication>> fetchApplications() async {
@@ -142,6 +249,7 @@ class UserApi {
     final response = await http.post(
       Uri.parse('${AppConfig.apiBaseUrl}/sync/finalize'),
       headers: _headers(token),
+      body: jsonEncode({}),
     );
 
     if (response.statusCode != 200) {

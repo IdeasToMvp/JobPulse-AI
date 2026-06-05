@@ -131,6 +131,9 @@ export class UsersService {
 
   async resetSyncData(userId: string): Promise<void> {
     const tables = [
+      'company_recruiter_emails',
+      'company_domains',
+      'discovered_companies',
       'processed_emails',
       'applications',
       'user_sync_platform_stats',

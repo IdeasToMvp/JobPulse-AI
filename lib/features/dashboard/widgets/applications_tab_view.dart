@@ -18,7 +18,18 @@ const _platformLabels = {
   'glassdoor': 'Glassdoor',
   'career_pages': 'Career Pages',
   'referrals': 'Referrals',
+  'company_direct': 'Company email',
 };
+
+const _statusFilters = [
+  _StatusFilter(id: 'all', label: 'All'),
+  _StatusFilter(id: 'applied', label: 'Applied'),
+  _StatusFilter(id: 'active', label: 'Active'),
+  _StatusFilter(id: 'interview', label: 'Interview'),
+  _StatusFilter(id: 'offer', label: 'Offer'),
+  _StatusFilter(id: 'rejected', label: 'Rejected'),
+  _StatusFilter(id: 'ghosted', label: 'Ghosted'),
+];
 
 class ApplicationsTabView extends StatefulWidget {
   const ApplicationsTabView({super.key});
@@ -32,6 +43,7 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
   bool _loading = true;
   String? _error;
   DateTime? _lastSyncAt;
+  String _statusFilter = 'all';
 
   @override
   void initState() {
@@ -55,6 +67,14 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
     }
   }
 
+  List<JobApplication> get _filteredApplications {
+    final sorted = [..._applications]
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+
+    if (_statusFilter == 'all') return sorted;
+    return sorted.where((a) => a.status == _statusFilter).toList();
+  }
+
   Future<void> _load() async {
     if (!AppSyncState.instance.hasSyncedData) {
       setState(() {
@@ -73,7 +93,8 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
       final apps = await UserApi.instance.fetchApplications();
       if (!mounted) return;
       setState(() {
-        _applications = apps;
+        _applications = apps
+          ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
         _loading = false;
       });
     } on AuthException catch (e) {
@@ -117,54 +138,136 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
           return _emptyState('No applications found for your selected sources.');
         }
 
+        final filtered = _filteredApplications;
+
         return ColoredBox(
           color: AppColors.dashboardBackground,
           child: RefreshIndicator(
             onRefresh: _load,
-            child: ListView.separated(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-              itemCount: _applications.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 10),
-              itemBuilder: (context, index) {
-                final app = _applications[index];
-                return GlassCard(
-                  padding: const EdgeInsets.all(14),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              app.company,
-                              style: AppTextStyles.featureTitle,
-                            ),
-                            if (app.role != null) ...[
-                              const SizedBox(height: 4),
-                              Text(
-                                app.role!,
-                                style: AppTextStyles.darkSubtitle,
-                              ),
+            child: CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Applications',
+                          style: AppTextStyles.darkGreeting.copyWith(
+                            fontSize: 22,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              for (var i = 0; i < _statusFilters.length; i++) ...[
+                                if (i > 0) const SizedBox(width: 8),
+                                _FilterChip(
+                                  label: _statusFilters[i].label,
+                                  selected:
+                                      _statusFilter == _statusFilters[i].id,
+                                  onTap: () => setState(
+                                    () => _statusFilter = _statusFilters[i].id,
+                                  ),
+                                ),
+                              ],
                             ],
-                            const SizedBox(height: 6),
-                            Text(
-                              _platformLabels[app.platformId] ?? app.platformId,
-                              style: AppTextStyles.darkStatCaption,
-                            ),
-                          ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (filtered.isEmpty)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Text(
+                          'No applications with status '
+                          '"${_statusFilters.firstWhere((f) => f.id == _statusFilter).label}".',
+                          textAlign: TextAlign.center,
+                          style: AppTextStyles.darkSubtitle,
                         ),
                       ),
-                      _statusBadge(app.status),
-                    ],
+                    ),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+                    sliver: SliverList.separated(
+                      itemCount: filtered.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 10),
+                      itemBuilder: (context, index) {
+                        final app = filtered[index];
+                        return GlassCard(
+                          padding: const EdgeInsets.all(14),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      app.company,
+                                      style: AppTextStyles.featureTitle,
+                                    ),
+                                    if (app.role != null) ...[
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        app.role!,
+                                        style: AppTextStyles.darkSubtitle,
+                                      ),
+                                    ],
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      _platformLabels[app.platformId] ??
+                                          app.platformId,
+                                      style: AppTextStyles.darkStatCaption,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Applied ${_formatDate(app.appliedAt)}',
+                                      style: AppTextStyles.darkStatCaption,
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Updated ${_formatDate(app.updatedAt)}',
+                                      style: AppTextStyles.darkStatCaption
+                                          .copyWith(
+                                        color: AppColors.secondary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              _statusBadge(app.status),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
                   ),
-                );
-              },
+              ],
             ),
           ),
         );
       },
     );
+  }
+
+  String _formatDate(DateTime date) {
+    final local = date.toLocal();
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${months[local.month - 1]} ${local.day}, ${local.year}';
   }
 
   Widget _statusBadge(String status) {
@@ -223,6 +326,59 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
                 style: AppTextStyles.darkSubtitle,
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusFilter {
+  const _StatusFilter({required this.id, required this.label});
+  final String id;
+  final String label;
+}
+
+class _FilterChip extends StatelessWidget {
+  const _FilterChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: selected
+                ? AppColors.secondary.withValues(alpha: 0.15)
+                : AppColors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: selected
+                  ? AppColors.secondary.withValues(alpha: 0.5)
+                  : AppColors.platformsCardBorder,
+            ),
+          ),
+          child: Text(
+            label,
+            style: AppTextStyles.featureTitle.copyWith(
+              fontSize: 13,
+              color: selected
+                  ? AppColors.secondary
+                  : AppColors.dashboardMuted,
+            ),
           ),
         ),
       ),

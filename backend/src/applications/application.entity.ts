@@ -16,6 +16,7 @@ export interface ApplicationRecord {
   cycleIndex: number;
   platformId: string;
   company: string;
+  companyId?: string;
   role?: string;
   status: ApplicationStatus;
   lastMessageId?: string;
@@ -52,6 +53,9 @@ export interface SyncScanMeta {
   newMessages: number;
   skippedProcessed: number;
   aiCalls: number;
+  companiesDiscovered?: number;
+  companyEmailsProcessed?: number;
+  companiesScanned?: number;
 }
 
 export interface SyncResultResponse {
@@ -72,6 +76,7 @@ export interface ApplicationListItem {
   role?: string;
   status: ApplicationStatus;
   platformId: string;
+  appliedAt: string;
   lastMessageAt?: string;
   updatedAt: string;
 }
@@ -83,6 +88,7 @@ export interface DbApplicationRow {
   cycle_index: number;
   platform_id: string;
   company: string;
+  company_id: string | null;
   role: string | null;
   status: string;
   last_message_id: string | null;
@@ -97,6 +103,7 @@ export interface DbProcessedEmailRow {
   message_id: string;
   thread_id: string;
   platform_id: string;
+  sync_phase: string;
   subject: string | null;
   from_address: string | null;
   internal_date: string;

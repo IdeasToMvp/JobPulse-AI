@@ -14,6 +14,7 @@ import {
   ProcessedEmailRecord,
   SyncResultResponse,
 } from './application.entity';
+import { normalizeCompanyKey, rolesOverlap } from '../sync/company-name.util';
 import { formatIsoDate } from '../sync/platform-filters';
 
 @Injectable()
@@ -54,12 +55,58 @@ export class ApplicationsService {
     return data ? this.mapApplication(data as DbApplicationRow) : null;
   }
 
+  async getLatestApplicationForCompany(
+    userId: string,
+    companyId: string,
+  ): Promise<ApplicationRecord | null> {
+    const { data, error } = await this.supabase.db
+      .from('applications')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('company_id', companyId)
+      .order('last_message_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) this.raise('getLatestApplicationForCompany', error);
+    return data ? this.mapApplication(data as DbApplicationRow) : null;
+  }
+
+  async getLatestApplicationForCompanyNameAndRole(
+    userId: string,
+    companyName: string,
+    role?: string,
+  ): Promise<ApplicationRecord | null> {
+    const targetKey = normalizeCompanyKey(companyName);
+    if (!targetKey) return null;
+
+    const { data, error } = await this.supabase.db
+      .from('applications')
+      .select('*')
+      .eq('user_id', userId)
+      .neq('status', 'unknown')
+      .order('last_message_at', { ascending: false })
+      .limit(200);
+
+    if (error) this.raise('getLatestApplicationForCompanyNameAndRole', error);
+
+    for (const row of data ?? []) {
+      const app = this.mapApplication(row as DbApplicationRow);
+      if (normalizeCompanyKey(app.company) !== targetKey) continue;
+      if (!rolesOverlap(app.role, role)) continue;
+      return app;
+    }
+
+    return null;
+  }
+
   async createApplication(input: {
     userId: string;
     threadId: string;
     cycleIndex: number;
     platformId: string;
     company: string;
+    companyId?: string;
     role?: string;
     status: ApplicationStatus;
     lastMessageId: string;
@@ -73,6 +120,7 @@ export class ApplicationsService {
         cycle_index: input.cycleIndex,
         platform_id: input.platformId,
         company: input.company,
+        company_id: input.companyId ?? null,
         role: input.role ?? null,
         status: input.status,
         last_message_id: input.lastMessageId,
@@ -93,17 +141,23 @@ export class ApplicationsService {
       role?: string;
       lastMessageId: string;
       lastMessageAt: Date;
+      companyId?: string;
     },
   ): Promise<ApplicationRecord> {
+    const payload: Record<string, unknown> = {
+      status: input.status,
+      company: input.company,
+      role: input.role ?? null,
+      last_message_id: input.lastMessageId,
+      last_message_at: input.lastMessageAt.toISOString(),
+    };
+    if (input.companyId) {
+      payload.company_id = input.companyId;
+    }
+
     const { data, error } = await this.supabase.db
       .from('applications')
-      .update({
-        status: input.status,
-        company: input.company,
-        role: input.role ?? null,
-        last_message_id: input.lastMessageId,
-        last_message_at: input.lastMessageAt.toISOString(),
-      })
+      .update(payload)
       .eq('id', id)
       .select('*')
       .single();
@@ -133,6 +187,7 @@ export class ApplicationsService {
     classificationStatus: ApplicationStatus | 'unknown';
     classificationSource: ClassificationSource;
     applicationId?: string;
+    syncPhase?: 'platform' | 'company';
   }): Promise<ProcessedEmailRecord> {
     const { data, error } = await this.supabase.db
       .from('processed_emails')
@@ -147,6 +202,7 @@ export class ApplicationsService {
         classification_status: input.classificationStatus,
         classification_source: input.classificationSource,
         application_id: input.applicationId ?? null,
+        sync_phase: input.syncPhase ?? 'platform',
       })
       .select('*')
       .single();
@@ -171,6 +227,7 @@ export class ApplicationsService {
       role: row.role ?? undefined,
       status: row.status as ApplicationStatus,
       platformId: row.platform_id,
+      appliedAt: row.created_at,
       lastMessageAt: row.last_message_at ?? undefined,
       updatedAt: row.updated_at,
     }));
@@ -190,6 +247,9 @@ export class ApplicationsService {
 
   async clearUserData(userId: string): Promise<void> {
     const tables = [
+      'company_recruiter_emails',
+      'company_domains',
+      'discovered_companies',
       'processed_emails',
       'applications',
       'user_sync_platform_stats',
@@ -381,6 +441,7 @@ export class ApplicationsService {
       cycleIndex: row.cycle_index,
       platformId: row.platform_id,
       company: row.company,
+      companyId: row.company_id ?? undefined,
       role: row.role ?? undefined,
       status: row.status as ApplicationStatus,
       lastMessageId: row.last_message_id ?? undefined,
