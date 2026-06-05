@@ -134,7 +134,13 @@ export class UsersService {
       .gt('sync_frequency_minutes', 0)
       .not('last_synced_at', 'is', null);
 
-    if (error) this.raiseDbError('listUsersDueForAutoSync', error);
+    if (error) {
+      // Migration 005 may not be applied yet — skip auto sync quietly.
+      if (error.message?.includes('auto_sync_enabled')) {
+        return [];
+      }
+      this.raiseDbError('listUsersDueForAutoSync', error);
+    }
 
     const now = Date.now();
     const due: UserRecord[] = [];
