@@ -1,0 +1,9 @@
+backend/
+android/
+ios/
+.cursor/
+.git/
+**/.dart_tool/
+**/node_modules/
+coverage/
+*.iml

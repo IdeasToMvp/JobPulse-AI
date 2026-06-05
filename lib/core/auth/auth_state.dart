@@ -20,6 +20,8 @@ class AuthState extends ChangeNotifier {
     notifyListeners();
 
     try {
+      await AuthService.instance.consumeWebOAuthCallbackIfPresent();
+
       final token = await TokenStorage.read();
       if (token == null) {
         _clearLocal();

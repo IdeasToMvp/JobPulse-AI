@@ -2,11 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/auth/auth_service.dart';
 import '../../core/auth/auth_state.dart';
+import '../../core/app_sync_state.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../main/main_shell.dart';
 import '../onboarding/onboarding_screen.dart';
+import '../platforms/platforms_screen.dart';
 import 'widgets/splash_hero.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -32,15 +35,27 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _bootstrap() async {
+    // Pick up OAuth token immediately on web reload (before splash delay).
+    try {
+      await AuthService.instance.consumeWebOAuthCallbackIfPresent();
+    } on AuthException {
+      // Error query param handled; fall through to restoreSession/onboarding.
+    }
+
     await Future<void>.delayed(const Duration(seconds: 2));
     if (!mounted) return;
 
     final hasSession = await AuthState.instance.restoreSession();
     if (!mounted) return;
 
-    final next = hasSession
-        ? const MainShell()
-        : const OnboardingScreen();
+    final Widget next;
+    if (hasSession) {
+      next = AppSyncState.instance.selectedPlatformIds.isEmpty
+          ? const PlatformsScreen()
+          : const MainShell();
+    } else {
+      next = const OnboardingScreen();
+    }
 
     Navigator.of(context).pushReplacement(
       MaterialPageRoute<void>(builder: (_) => next),

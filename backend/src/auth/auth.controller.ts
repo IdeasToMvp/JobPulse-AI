@@ -26,13 +26,16 @@ export class AuthController {
 
   /** Returns Google OAuth URL for mobile/web clients to open in a browser. */
   @Get('google/url')
-  getGoogleAuthUrl(@Query('redirectUri') redirectUri?: string) {
-    return this.auth.getGoogleAuthUrl(redirectUri);
+  getGoogleAuthUrl(
+    @Query('redirectUri') redirectUri?: string,
+    @Query('clientRedirectUri') clientRedirectUri?: string,
+  ) {
+    return this.auth.getGoogleAuthUrl(redirectUri, clientRedirectUri);
   }
 
   /**
    * Browser redirect target configured in Google Cloud Console.
-   * Exchanges the code server-side and redirects to the mobile deep link.
+   * Exchanges the code server-side and redirects to the client callback URL.
    */
   @Get('google/callback')
   async googleCallback(
@@ -41,29 +44,30 @@ export class AuthController {
     @Query('error') error: string | undefined,
     @Res() res: Response,
   ) {
-    const mobileRedirect =
+    const fallbackRedirect =
       this.config.get<string>('mobileRedirectUri') ?? 'jobpulse://auth/callback';
 
     if (error || !code) {
       return res.redirect(
-        `${mobileRedirect}?error=${encodeURIComponent(error ?? 'access_denied')}`,
+        `${fallbackRedirect}?error=${encodeURIComponent(error ?? 'access_denied')}`,
       );
     }
 
     try {
-      const session = await this.auth.loginWithGoogleCode(
+      const { session, clientRedirectUri } = await this.auth.loginWithGoogleCode(
         code,
         this.config.get<string>('google.redirectUri'),
         state,
       );
+      const separator = clientRedirectUri.includes('?') ? '&' : '?';
       return res.redirect(
-        `${mobileRedirect}?token=${encodeURIComponent(session.accessToken)}`,
+        `${clientRedirectUri}${separator}token=${encodeURIComponent(session.accessToken)}`,
       );
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Google authentication failed';
       return res.redirect(
-        `${mobileRedirect}?error=${encodeURIComponent(message)}`,
+        `${fallbackRedirect}?error=${encodeURIComponent(message)}`,
       );
     }
   }
@@ -71,15 +75,16 @@ export class AuthController {
   /** Mobile clients POST the authorization code after Google sign-in. */
   @Post('google/token')
   @HttpCode(200)
-  exchangeGoogleToken(
+  async exchangeGoogleToken(
     @Body() body: GoogleTokenDto,
     @Query('state') state?: string,
   ) {
-    return this.auth.loginWithGoogleCode(
+    const { session } = await this.auth.loginWithGoogleCode(
       body.code,
       body.redirectUri,
       state,
     );
+    return session;
   }
 
   /**

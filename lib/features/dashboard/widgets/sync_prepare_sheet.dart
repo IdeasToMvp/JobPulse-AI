@@ -5,6 +5,7 @@ import '../../../core/api/user_api.dart';
 import '../../../core/app_sync_state.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/responsive_app_frame.dart';
 import '../../platforms/models/job_platform.dart';
 import '../../platforms/widgets/platform_card.dart';
 
@@ -42,7 +43,7 @@ class SyncPrepareSheet extends StatefulWidget {
     Set<String>? initialPlatformIds,
     bool skipSourcesStep = false,
   }) {
-    return showModalBottomSheet<void>(
+    return showAppBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.white,

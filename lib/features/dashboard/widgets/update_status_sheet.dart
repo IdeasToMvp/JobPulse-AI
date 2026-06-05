@@ -8,6 +8,7 @@ import '../../../core/models/application.dart';
 import '../../../core/models/application_status.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/responsive_app_frame.dart';
 
 typedef StatusUpdateCallback = void Function(ApplicationDetail detail);
 
@@ -26,7 +27,7 @@ class UpdateStatusSheet extends StatefulWidget {
     required JobApplication application,
     StatusUpdateCallback? onUpdated,
   }) {
-    return showModalBottomSheet<void>(
+    return showAppBottomSheet<void>(
       context: context,
       backgroundColor: AppColors.white,
       isScrollControlled: true,

@@ -1,11 +1,11 @@
 {
-    "name": "jobsync",
-    "short_name": "jobsync",
+    "name": "JobPulse AI",
+    "short_name": "JobPulse",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#050514",
     "theme_color": "#2E3192",
-    "description": "A new Flutter project.",
+    "description": "Track job applications from your inbox.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

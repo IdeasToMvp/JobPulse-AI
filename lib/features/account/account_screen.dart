@@ -6,6 +6,7 @@ import '../login/login_screen.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/widgets/glass_card.dart';
+import '../../core/widgets/responsive_app_frame.dart';
 import '../platforms/models/job_platform.dart';
 
 class AccountScreen extends StatelessWidget {
@@ -477,7 +478,7 @@ class AccountScreen extends StatelessWidget {
 
   Future<void> _editSources(BuildContext context, AppSyncState state) async {
     final selected = Set<String>.from(state.selectedPlatformIds);
-    await showModalBottomSheet<void>(
+    await showAppBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.white,

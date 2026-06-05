@@ -7,6 +7,7 @@ import '../../../core/auth/auth_service.dart';
 import '../../../core/models/application.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import '../../../core/widgets/responsive_app_frame.dart';
 
 typedef DetailsUpdateCallback = void Function(ApplicationDetail detail);
 
@@ -33,7 +34,7 @@ class ActiveDetailsSheet extends StatefulWidget {
     String targetStatus = 'active',
     DetailsUpdateCallback? onUpdated,
   }) {
-    return showModalBottomSheet<void>(
+    return showAppBottomSheet<void>(
       context: context,
       backgroundColor: AppColors.white,
       isScrollControlled: true,

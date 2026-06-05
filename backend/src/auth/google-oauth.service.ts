@@ -1,12 +1,14 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OAuth2Client, TokenPayload } from 'google-auth-library';
 import { randomBytes } from 'crypto';
 
+import { SupabaseService } from '../supabase/supabase.service';
 import { GMAIL_SCOPES } from './google-scopes';
 
 export { GMAIL_SCOPES };
@@ -25,15 +27,27 @@ export interface GoogleProfile {
   picture?: string;
 }
 
+interface OAuthStateRow {
+  state: string;
+  redirect_uri: string;
+  client_redirect_uri: string;
+  expires_at: string;
+}
+
 @Injectable()
 export class GoogleOAuthService {
+  private readonly logger = new Logger(GoogleOAuthService.name);
   private readonly oauthClient: OAuth2Client;
+  /** Fallback when oauth_states table is not migrated yet. */
   private readonly pendingStates = new Map<
     string,
-    { redirectUri: string; expiresAt: number }
+    { redirectUri: string; clientRedirectUri: string; expiresAt: number }
   >();
 
-  constructor(private readonly config: ConfigService) {
+  constructor(
+    private readonly config: ConfigService,
+    private readonly supabase: SupabaseService,
+  ) {
     this.oauthClient = new OAuth2Client(
       this.config.get<string>('google.clientId'),
       this.config.get<string>('google.clientSecret'),
@@ -51,7 +65,10 @@ export class GoogleOAuthService {
     }
   }
 
-  createAuthUrl(redirectUri?: string): { authUrl: string; state: string } {
+  async createAuthUrl(
+    redirectUri?: string,
+    clientRedirectUri?: string,
+  ): Promise<{ authUrl: string; state: string }> {
     this.assertConfigured();
 
     const state = randomBytes(24).toString('hex');
@@ -59,11 +76,26 @@ export class GoogleOAuthService {
       redirectUri ??
       this.config.get<string>('google.redirectUri') ??
       this.config.get<string>('mobileRedirectUri')!;
+    const resolvedClientRedirect =
+      clientRedirectUri ??
+      this.config.get<string>('mobileRedirectUri') ??
+      'jobpulse://auth/callback';
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-    this.pendingStates.set(state, {
+    const stored = await this.storeState({
+      state,
       redirectUri: resolvedRedirect,
-      expiresAt: Date.now() + 10 * 60 * 1000,
+      clientRedirectUri: resolvedClientRedirect,
+      expiresAt,
     });
+
+    if (!stored) {
+      this.pendingStates.set(state, {
+        redirectUri: resolvedRedirect,
+        clientRedirectUri: resolvedClientRedirect,
+        expiresAt: expiresAt.getTime(),
+      });
+    }
 
     const authUrl = this.oauthClient.generateAuthUrl({
       access_type: 'offline',
@@ -77,7 +109,18 @@ export class GoogleOAuthService {
     return { authUrl, state };
   }
 
-  consumeState(state: string, redirectUri: string): void {
+  async consumeState(state: string, redirectUri: string): Promise<string> {
+    const fromDb = await this.loadAndDeleteState(state);
+    if (fromDb) {
+      if (new Date(fromDb.expires_at) < new Date()) {
+        throw new UnauthorizedException('Invalid or expired OAuth state');
+      }
+      if (fromDb.redirect_uri !== redirectUri) {
+        throw new UnauthorizedException('Redirect URI mismatch');
+      }
+      return fromDb.client_redirect_uri;
+    }
+
     const entry = this.pendingStates.get(state);
     this.pendingStates.delete(state);
 
@@ -88,6 +131,8 @@ export class GoogleOAuthService {
     if (entry.redirectUri !== redirectUri) {
       throw new UnauthorizedException('Redirect URI mismatch');
     }
+
+    return entry.clientRedirectUri;
   }
 
   async exchangeCode(
@@ -146,5 +191,53 @@ export class GoogleOAuthService {
       name: payload.name ?? payload.email,
       picture: payload.picture,
     };
+  }
+
+  private async storeState(input: {
+    state: string;
+    redirectUri: string;
+    clientRedirectUri: string;
+    expiresAt: Date;
+  }): Promise<boolean> {
+    const { error } = await this.supabase.db.from('oauth_states').insert({
+      state: input.state,
+      redirect_uri: input.redirectUri,
+      client_redirect_uri: input.clientRedirectUri,
+      expires_at: input.expiresAt.toISOString(),
+    });
+
+    if (error) {
+      if (error.message?.includes('oauth_states')) {
+        this.logger.warn(
+          'oauth_states table missing; using in-memory OAuth state (not safe for multi-instance deploys)',
+        );
+        return false;
+      }
+      this.logger.error(`storeState failed: ${error.message}`);
+      throw new BadRequestException('Could not start Google sign-in');
+    }
+
+    return true;
+  }
+
+  private async loadAndDeleteState(
+    state: string,
+  ): Promise<OAuthStateRow | null> {
+    const { data, error } = await this.supabase.db
+      .from('oauth_states')
+      .select('state, redirect_uri, client_redirect_uri, expires_at')
+      .eq('state', state)
+      .maybeSingle();
+
+    if (error) {
+      if (error.message?.includes('oauth_states')) return null;
+      this.logger.error(`loadState failed: ${error.message}`);
+      return null;
+    }
+
+    if (!data) return null;
+
+    await this.supabase.db.from('oauth_states').delete().eq('state', state);
+    return data as OAuthStateRow;
   }
 }

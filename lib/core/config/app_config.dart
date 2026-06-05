@@ -43,4 +43,24 @@ class AppConfig {
   static const oauthCallbackScheme = 'jobpulse';
   static const oauthCallbackHost = 'auth';
   static const oauthCallbackPath = '/callback';
+
+  /// Where the backend redirects after Google OAuth (web origin or mobile deep link).
+  static String get oauthClientRedirectUri {
+    if (kIsWeb) {
+      final base = Uri.base;
+      return Uri(
+        scheme: base.scheme,
+        host: base.host,
+        port: base.hasPort ? base.port : null,
+        path: base.path.isEmpty ? '/' : base.path,
+      ).toString();
+    }
+    return '$oauthCallbackScheme://$oauthCallbackHost$oauthCallbackPath';
+  }
+
+  /// Scheme passed to FlutterWebAuth2 (`http`/`https` on web).
+  static String get oauthCallbackSchemeForAuth {
+    if (kIsWeb) return Uri.base.scheme;
+    return oauthCallbackScheme;
+  }
 }

@@ -21,17 +21,25 @@ export class AuthService {
     private readonly config: ConfigService,
   ) {}
 
-  getGoogleAuthUrl(redirectUri?: string) {
-    return this.googleOAuth.createAuthUrl(redirectUri);
+  getGoogleAuthUrl(redirectUri?: string, clientRedirectUri?: string) {
+    return this.googleOAuth.createAuthUrl(redirectUri, clientRedirectUri);
   }
 
   async loginWithGoogleCode(
     code: string,
     redirectUri?: string,
     state?: string,
-  ): Promise<AuthTokensResponse> {
+  ): Promise<{ session: AuthTokensResponse; clientRedirectUri: string }> {
+    const defaultClientRedirect =
+      this.config.get<string>('mobileRedirectUri') ??
+      'jobpulse://auth/callback';
+
+    let clientRedirectUri = defaultClientRedirect;
     if (state && redirectUri) {
-      this.googleOAuth.consumeState(state, redirectUri);
+      clientRedirectUri = await this.googleOAuth.consumeState(
+        state,
+        redirectUri,
+      );
     }
 
     const { tokens, profile: googleProfile } =
@@ -50,7 +58,10 @@ export class AuthService {
     });
 
     const userProfile = await this.users.getProfile(user.id);
-    return this.issueSession(user, userProfile);
+    return {
+      session: this.issueSession(user, userProfile),
+      clientRedirectUri,
+    };
   }
 
   async loginWithGoogleIdToken(idToken: string): Promise<AuthTokensResponse> {
