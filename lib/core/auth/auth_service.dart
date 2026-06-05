@@ -1,0 +1,112 @@
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
+import 'package:http/http.dart' as http;
+
+import '../config/app_config.dart';
+import 'auth_user.dart';
+import 'token_storage.dart';
+
+class AuthException implements Exception {
+  AuthException(this.message);
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
+class AuthService {
+  AuthService._();
+
+  static final AuthService instance = AuthService._();
+
+  Future<AuthUser> signInWithGoogle() async {
+    final urlResponse = await http.get(
+      Uri.parse('${AppConfig.apiBaseUrl}/auth/google/url'),
+    );
+
+    if (urlResponse.statusCode != 200) {
+      throw AuthException(
+        'Could not start Google sign-in (${urlResponse.statusCode}). '
+        'Is the backend running?',
+      );
+    }
+
+    final urlBody = jsonDecode(urlResponse.body) as Map<String, dynamic>;
+    final authUrl = urlBody['authUrl'] as String?;
+
+    if (authUrl == null || authUrl.isEmpty) {
+      throw AuthException('Invalid auth URL from server');
+    }
+
+    final callback = await FlutterWebAuth2.authenticate(
+      url: authUrl,
+      callbackUrlScheme: AppConfig.oauthCallbackScheme,
+      options: const FlutterWebAuth2Options(
+        preferEphemeral: false,
+      ),
+    );
+
+    final callbackUri = Uri.parse(callback);
+    final error = callbackUri.queryParameters['error'];
+    if (error != null && error.isNotEmpty) {
+      throw AuthException(Uri.decodeComponent(error));
+    }
+
+    final token = callbackUri.queryParameters['token'];
+    if (token == null || token.isEmpty) {
+      throw AuthException('Sign-in completed but no session token was returned');
+    }
+
+    await TokenStorage.save(token);
+    return fetchCurrentUser(token);
+  }
+
+  Future<AuthUser?> restoreSession() async {
+    final token = await TokenStorage.read();
+    if (token == null) return null;
+
+    try {
+      return await fetchCurrentUser(token);
+    } catch (e) {
+      debugPrint('Session restore failed: $e');
+      await TokenStorage.clear();
+      return null;
+    }
+  }
+
+  Future<AuthUser> fetchCurrentUser(String token) async {
+    final response = await http.get(
+      Uri.parse('${AppConfig.apiBaseUrl}/auth/me'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    if (response.statusCode != 200) {
+      throw AuthException('Session expired. Please sign in again.');
+    }
+
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final userJson = body['user'] as Map<String, dynamic>?;
+    if (userJson == null) {
+      throw AuthException('Invalid user profile from server');
+    }
+
+    return AuthUser.fromJson(userJson);
+  }
+
+  Future<void> signOut() async {
+    final token = await TokenStorage.read();
+    if (token != null) {
+      try {
+        await http.post(
+          Uri.parse('${AppConfig.apiBaseUrl}/auth/logout'),
+          headers: {'Authorization': 'Bearer $token'},
+        );
+      } catch (e) {
+        debugPrint('Logout API call failed: $e');
+      }
+    }
+    await TokenStorage.clear();
+  }
+}

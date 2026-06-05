@@ -1,61 +1,103 @@
 import 'package:flutter/material.dart';
+
+import '../../core/auth/auth_service.dart';
+import '../../core/auth/auth_state.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../platforms/platforms_screen.dart';
 import 'widgets/google_logo.dart';
 import 'widgets/login_hero_icon.dart';
 
-class LoginScreen extends StatelessWidget {
+class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              AppColors.loginGradientTop,
-              AppColors.loginGradientBottom,
-            ],
-          ),
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  bool _isSigningIn = false;
+
+  Future<void> _handleGoogleSignIn() async {
+    if (_isSigningIn) return;
+
+    setState(() => _isSigningIn = true);
+
+    try {
+      await AuthState.instance.signInWithGoogle();
+      if (!mounted) return;
+
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute<void>(
+          builder: (_) => const PlatformsScreen(),
         ),
-        child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-                child: _buildHeader(),
-              ),
-              const SizedBox(height: 20),
-              const LoginHeroIcon(),
-              const SizedBox(height: 20),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 28),
-                child: Text(
-                  'Sync your trajectory',
-                  style: AppTextStyles.loginHeroTitle,
-                  textAlign: TextAlign.center,
+      );
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Sign-in failed: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSigningIn = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+        body: DecoratedBox(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                AppColors.loginGradientTop,
+                AppColors.loginGradientBottom,
+              ],
+            ),
+          ),
+          child: SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                  child: _buildHeader(),
                 ),
-              ),
-              const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
-                child: Text(
-                  'Connect your account to let JobPulse AI organize your career moves.',
-                  style: AppTextStyles.loginHeroSubtitle,
-                  textAlign: TextAlign.center,
+                const SizedBox(height: 20),
+                const LoginHeroIcon(),
+                const SizedBox(height: 20),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 28),
+                  child: Text(
+                    'Sync your trajectory',
+                    style: AppTextStyles.loginHeroTitle,
+                    textAlign: TextAlign.center,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 20),
-              Expanded(child: _buildActionCard(context)),
-              const SizedBox(height: 12),
-              _buildFooterStatus(),
-              const SizedBox(height: 8),
-            ],
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Text(
+                    'Connect your Gmail account to let JobPulse AI organize your career moves.',
+                    style: AppTextStyles.loginHeroSubtitle,
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Expanded(child: _buildActionCard()),
+                const SizedBox(height: 12),
+                _buildFooterStatus(),
+                const SizedBox(height: 8),
+              ],
+            ),
           ),
         ),
       ),
@@ -74,7 +116,7 @@ class LoginScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildActionCard(BuildContext context) {
+  Widget _buildActionCard() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
@@ -92,7 +134,7 @@ class LoginScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _googleSignInButton(context),
+          _googleSignInButton(),
           const SizedBox(height: 20),
           _enterpriseDivider(),
           const SizedBox(height: 16),
@@ -104,17 +146,11 @@ class LoginScreen extends StatelessWidget {
     );
   }
 
-  Widget _googleSignInButton(BuildContext context) {
+  Widget _googleSignInButton() {
     return SizedBox(
       height: 52,
       child: OutlinedButton(
-        onPressed: () {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute<void>(
-              builder: (_) => const PlatformsScreen(),
-            ),
-          );
-        },
+        onPressed: _isSigningIn ? null : _handleGoogleSignIn,
         style: OutlinedButton.styleFrom(
           backgroundColor: AppColors.white,
           foregroundColor: AppColors.onboardingTitle,
@@ -123,14 +159,23 @@ class LoginScreen extends StatelessWidget {
             borderRadius: BorderRadius.circular(14),
           ),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const GoogleLogo(size: 22),
-            const SizedBox(width: 12),
-            Text('Continue with Google', style: AppTextStyles.loginGoogleButton),
-          ],
-        ),
+        child: _isSigningIn
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const GoogleLogo(size: 22),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Continue with Google',
+                    style: AppTextStyles.loginGoogleButton,
+                  ),
+                ],
+              ),
       ),
     );
   }

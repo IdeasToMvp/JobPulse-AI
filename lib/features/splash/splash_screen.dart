@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/auth/auth_state.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
+import '../main/main_shell.dart';
 import '../onboarding/onboarding_screen.dart';
 import 'widgets/splash_hero.dart';
 
@@ -17,7 +19,6 @@ class SplashScreen extends StatefulWidget {
 class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _progressController;
-  Timer? _navigateTimer;
 
   @override
   void initState() {
@@ -27,19 +28,27 @@ class _SplashScreenState extends State<SplashScreen>
       duration: const Duration(seconds: 2),
     )..forward();
 
-    _navigateTimer = Timer(const Duration(seconds: 3), () {
-      if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute<void>(
-          builder: (_) => const OnboardingScreen(),
-        ),
-      );
-    });
+    unawaited(_bootstrap());
+  }
+
+  Future<void> _bootstrap() async {
+    await Future<void>.delayed(const Duration(seconds: 2));
+    if (!mounted) return;
+
+    final hasSession = await AuthState.instance.restoreSession();
+    if (!mounted) return;
+
+    final next = hasSession
+        ? const MainShell()
+        : const OnboardingScreen();
+
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute<void>(builder: (_) => next),
+    );
   }
 
   @override
   void dispose() {
-    _navigateTimer?.cancel();
     _progressController.dispose();
     super.dispose();
   }

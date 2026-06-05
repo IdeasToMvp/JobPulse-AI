@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../core/auth/auth_state.dart';
 import '../../core/theme/app_colors.dart';
 import '../account/account_screen.dart';
+import '../login/login_screen.dart';
 import '../dashboard/dashboard_tab.dart';
 
 class MainShell extends StatefulWidget {
@@ -20,6 +22,19 @@ class _MainShellState extends State<MainShell> {
     _NavItem(icon: Icons.notifications_outlined, label: 'Activity'),
     _NavItem(icon: Icons.person_outline_rounded, label: 'Account'),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!AuthState.instance.isAuthenticated && mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
+          (_) => false,
+        );
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

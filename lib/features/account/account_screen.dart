@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../core/app_sync_state.dart';
+import '../../core/auth/auth_service.dart';
+import '../../core/auth/auth_state.dart';
+import '../login/login_screen.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/widgets/glass_card.dart';
@@ -51,6 +54,8 @@ class AccountScreen extends StatelessWidget {
                 _privacySection(context, state),
                 const SizedBox(height: 16),
                 _supportSection(context),
+                const SizedBox(height: 16),
+                _signOutSection(context),
               ],
             ),
           ),
@@ -155,7 +160,7 @@ class AccountScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          _outlineAction(context, 'Reconnect Gmail', () {}),
+          _outlineAction(context, 'Reconnect Gmail', () => _reconnectGmail(context)),
           const SizedBox(height: 8),
           _outlineAction(
             context,
@@ -311,6 +316,18 @@ class AccountScreen extends StatelessWidget {
             destructive: true,
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _signOutSection(BuildContext context) {
+    return _section(
+      title: 'Session',
+      child: _outlineAction(
+        context,
+        'Sign Out',
+        () => _confirmSignOut(context),
+        destructive: true,
       ),
     );
   }
@@ -472,6 +489,50 @@ class AccountScreen extends StatelessWidget {
     );
   }
 
+  Future<void> _reconnectGmail(BuildContext context) async {
+    try {
+      await AuthState.instance.signInWithGoogle();
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Gmail reconnected successfully')),
+      );
+    } on AuthException catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    }
+  }
+
+  Future<void> _confirmSignOut(BuildContext context) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.white,
+        title: const Text('Sign out?'),
+        content: const Text(
+          'You will need to sign in with Google again to access your dashboard.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Sign Out', style: TextStyle(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+
+    await AuthState.instance.signOut();
+    if (!context.mounted) return;
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
+      (_) => false,
+    );
+  }
+
   Future<void> _confirmDisconnect(BuildContext context, AppSyncState state) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -488,7 +549,15 @@ class AccountScreen extends StatelessWidget {
         ],
       ),
     );
-    if (ok == true) state.disconnectGmail();
+    if (ok != true || !context.mounted) return;
+
+    await AuthState.instance.signOut();
+    if (!context.mounted) return;
+
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
+      (_) => false,
+    );
   }
 
   Future<void> _confirmDeleteData(BuildContext context, AppSyncState state) async {

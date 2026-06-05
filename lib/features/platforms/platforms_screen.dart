@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../core/app_sync_state.dart';
+import '../../core/auth/auth_state.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
+import '../login/login_screen.dart';
 import '../main/main_shell.dart';
 import 'models/job_platform.dart';
 import 'widgets/platform_card.dart';
@@ -14,7 +17,21 @@ class PlatformsScreen extends StatefulWidget {
 }
 
 class _PlatformsScreenState extends State<PlatformsScreen> {
-  final Set<String> _selectedIds = {};
+  late final Set<String> _selectedIds =
+      Set<String>.from(AppSyncState.instance.selectedPlatformIds);
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!AuthState.instance.isAuthenticated && mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
+          (_) => false,
+        );
+      }
+    });
+  }
 
   void _togglePlatform(String id) {
     setState(() {
@@ -64,13 +81,17 @@ class _PlatformsScreenState extends State<PlatformsScreen> {
               SizedBox(
                 height: 48,
                 child: FilledButton(
-                  onPressed: () {
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const MainShell(),
-                      ),
-                    );
-                  },
+                  onPressed: _selectedIds.isEmpty
+                      ? null
+                      : () {
+                          AppSyncState.instance
+                              .updatePlatformSelection(_selectedIds);
+                          Navigator.of(context).pushReplacement(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const MainShell(),
+                            ),
+                          );
+                        },
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: AppColors.white,
