@@ -216,6 +216,14 @@ class AccountScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (labels.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                'No job sources selected yet.',
+                style: AppTextStyles.darkStatCaption,
+              ),
+            ),
           ...labels.map(
             (label) => Padding(
               padding: const EdgeInsets.only(bottom: 8),
@@ -257,11 +265,19 @@ class AccountScreen extends StatelessWidget {
         children: [
           _infoRow('Current Scan Range', state.scanRange),
           const SizedBox(height: 12),
-          _outlineAction(context, 'Rescan Gmail', () {
-            state.runSync();
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Gmail rescan started')),
-            );
+          _outlineAction(context, 'Rescan Gmail', () async {
+            try {
+              await state.runSync();
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Gmail rescan completed')),
+              );
+            } catch (_) {
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Rescan failed')),
+              );
+            }
           }),
           const SizedBox(height: 8),
           Text(
@@ -576,7 +592,19 @@ class AccountScreen extends StatelessWidget {
         ],
       ),
     );
-    if (ok == true) state.deleteAllData();
+    if (ok != true || !context.mounted) return;
+    try {
+      await state.deleteAllData();
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('All sync data cleared')),
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to clear data')),
+      );
+    }
   }
 
   Future<void> _editSources(BuildContext context, AppSyncState state) async {
@@ -648,10 +676,21 @@ class AccountScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 12),
                       FilledButton(
-                        onPressed: () {
-                          state.updatePlatformSelection(selected);
-                          Navigator.pop(ctx);
-                        },
+                        onPressed: selected.isEmpty
+                            ? null
+                            : () async {
+                                try {
+                                  await state.saveJobSources(selected);
+                                  if (ctx.mounted) Navigator.pop(ctx);
+                                } catch (_) {
+                                  if (!ctx.mounted) return;
+                                  ScaffoldMessenger.of(ctx).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Failed to save job sources'),
+                                    ),
+                                  );
+                                }
+                              },
                         style: FilledButton.styleFrom(
                           backgroundColor: AppColors.secondary,
                           minimumSize: const Size.fromHeight(48),

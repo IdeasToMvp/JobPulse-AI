@@ -4,7 +4,6 @@ import '../../../core/app_sync_state.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/glass_card.dart';
-import '../models/dashboard_data.dart';
 import 'dashboard_sync_button.dart';
 import 'dashboard_syncing_view.dart';
 
@@ -45,12 +44,11 @@ class _DashboardContent extends StatelessWidget {
             _buildGreetingHeader(context, firstName),
             const SizedBox(height: 20),
             _buildStatsGrid(),
-            const SizedBox(height: 20),
-            _buildAiInsight(),
-            const SizedBox(height: 22),
-            _buildNeedsAttention(),
-            const SizedBox(height: 22),
-            _buildRecentActivity(),
+            if (state.sync.emailsProcessed == 0 &&
+                state.sync.applicationsCount == 0) ...[
+              const SizedBox(height: 20),
+              _buildNoResultsCard(),
+            ],
           ],
         ),
       ),
@@ -142,7 +140,7 @@ class _DashboardContent extends StatelessWidget {
   }
 
   Widget _buildStatsGrid() {
-    const stats = DashboardStats.sample;
+    final sync = state.sync;
     return Column(
       children: [
         Row(
@@ -152,7 +150,7 @@ class _DashboardContent extends StatelessWidget {
                 icon: Icons.description_outlined,
                 iconColor: const Color(0xFF60A5FA),
                 tag: 'ALL',
-                value: '${stats.applications}',
+                value: '${sync.applicationsCount}',
                 label: 'Applications',
               ),
             ),
@@ -162,7 +160,7 @@ class _DashboardContent extends StatelessWidget {
                 icon: Icons.bolt_rounded,
                 iconColor: AppColors.secondary,
                 tag: 'LIVE',
-                value: '${stats.active}',
+                value: '${sync.activeCount}',
                 label: 'Active',
               ),
             ),
@@ -176,7 +174,7 @@ class _DashboardContent extends StatelessWidget {
                 icon: Icons.calendar_month_outlined,
                 iconColor: AppColors.warning,
                 tag: 'STAGE 3',
-                value: '${stats.interviews}',
+                value: '${sync.interviewsCount}',
                 label: 'Interviews',
                 accentColor: AppColors.warning,
               ),
@@ -187,7 +185,7 @@ class _DashboardContent extends StatelessWidget {
                 icon: Icons.verified_rounded,
                 iconColor: AppColors.success,
                 tag: 'GOAL',
-                value: '${stats.offers}',
+                value: '${sync.offersCount}',
                 label: 'Offers',
                 accentColor: AppColors.success,
               ),
@@ -242,191 +240,24 @@ class _DashboardContent extends StatelessWidget {
     );
   }
 
-  Widget _buildAiInsight() {
+  Widget _buildNoResultsCard() {
     return GlassCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Icon(
-                Icons.lightbulb_outline_rounded,
-                color: AppColors.secondary.withValues(alpha: 0.9),
-                size: 18,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'AI Insight',
-                style: AppTextStyles.benefitsHeader.copyWith(
-                  color: AppColors.secondary,
-                ),
-              ),
-            ],
+          Icon(
+            Icons.info_outline_rounded,
+            color: AppColors.secondary.withValues(alpha: 0.8),
           ),
-          const SizedBox(height: 10),
-          RichText(
-            text: TextSpan(
-              style: AppTextStyles.darkSubtitle.copyWith(height: 1.45),
-              children: [
-                const TextSpan(
-                  text: 'Your highest interview success rate comes from ',
-                ),
-                TextSpan(
-                  text: 'LinkedIn applications.',
-                  style: TextStyle(
-                    color: AppColors.secondary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Sync completed. Gmail analysis will populate applications '
+              'as we process your inbox.',
+              style: AppTextStyles.darkSubtitle.copyWith(height: 1.4),
             ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildNeedsAttention() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Needs Attention', style: AppTextStyles.darkSectionTitle),
-        const SizedBox(height: 12),
-        ...AttentionItem.sample.map(_attentionCard),
-      ],
-    );
-  }
-
-  Widget _attentionCard(AttentionItem item) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Opacity(
-        opacity: item.dimmed ? 0.45 : 1,
-        child: GlassCard(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: item.iconColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(item.icon, color: item.iconColor, size: 20),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.title,
-                      style: AppTextStyles.featureTitle.copyWith(
-                        color: AppColors.onboardingTitle,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(item.subtitle, style: AppTextStyles.darkStatCaption),
-                  ],
-                ),
-              ),
-              if (item.tag != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: (item.tagColor ?? AppColors.secondary)
-                        .withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    item.tag!,
-                    style: AppTextStyles.darkCardTag.copyWith(
-                      color: item.tagColor ?? AppColors.secondary,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRecentActivity() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text('Recent Activity', style: AppTextStyles.darkSectionTitle),
-            const Spacer(),
-            Text(
-              'View All',
-              style: TextStyle(
-                color: AppColors.secondary,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
-        ...List.generate(ActivityItem.sample.length, (index) {
-          final item = ActivityItem.sample[index];
-          return _activityRow(item, showLine: index < ActivityItem.sample.length - 1);
-        }),
-      ],
-    );
-  }
-
-  Widget _activityRow(ActivityItem item, {required bool showLine}) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 14,
-          child: Column(
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                  color: AppColors.secondary,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              if (showLine)
-                Container(
-                  width: 2,
-                  height: 36,
-                  margin: const EdgeInsets.symmetric(vertical: 4),
-                  color: AppColors.loginDivider,
-                ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.title,
-                  style: AppTextStyles.featureTitle.copyWith(
-                    color: AppColors.onboardingTitle,
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(item.timeAgo, style: AppTextStyles.darkStatCaption),
-              ],
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

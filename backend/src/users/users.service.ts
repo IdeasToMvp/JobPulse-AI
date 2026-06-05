@@ -6,7 +6,13 @@ import {
 import { GMAIL_SCOPES } from '../auth/google-scopes';
 import { TokenEncryptionService } from '../common/crypto/token-encryption.service';
 import { SupabaseService } from '../supabase/supabase.service';
-import { DbOAuthRow, DbUserRow, UserRecord } from './user.entity';
+import { JobSourcesService } from './job-sources.service';
+import {
+  DbOAuthRow,
+  DbUserRow,
+  UserProfileResponse,
+  UserRecord,
+} from './user.entity';
 
 export interface UpsertGoogleUserInput {
   googleId: string;
@@ -25,6 +31,7 @@ export class UsersService {
   constructor(
     private readonly supabase: SupabaseService,
     private readonly encryption: TokenEncryptionService,
+    private readonly jobSources: JobSourcesService,
   ) {}
 
   async findById(id: string): Promise<UserRecord | null> {
@@ -49,6 +56,14 @@ export class UsersService {
     return data ? this.mapUser(data as DbUserRow) : null;
   }
 
+  async getProfile(userId: string): Promise<UserProfileResponse | null> {
+    const user = await this.findById(userId);
+    if (!user) return null;
+
+    const jobSources = await this.jobSources.getForUser(userId);
+    return this.toProfile(user, jobSources);
+  }
+
   async upsertGoogleUser(input: UpsertGoogleUserInput): Promise<UserRecord> {
     const existing = await this.findByGoogleId(input.googleId);
     const user = existing
@@ -66,6 +81,63 @@ export class UsersService {
       .eq('user_id', userId);
 
     if (error) this.raiseDbError('clearOAuthCredentials', error);
+  }
+
+  async updateSyncTimestamp(userId: string, isoTime: string): Promise<void> {
+    const { error } = await this.supabase.db
+      .from('users')
+      .update({ last_synced_at: isoTime })
+      .eq('id', userId);
+
+    if (error) this.raiseDbError('updateSyncTimestamp', error);
+  }
+
+  async resetSyncData(userId: string): Promise<void> {
+    const { error } = await this.supabase.db
+      .from('users')
+      .update({
+        last_synced_at: null,
+        emails_processed: 0,
+        applications_count: 0,
+        active_count: 0,
+        interviews_count: 0,
+        offers_count: 0,
+      })
+      .eq('id', userId);
+
+    if (error) this.raiseDbError('resetSyncData', error);
+  }
+
+  toSyncResult(user: UserRecord) {
+    return {
+      lastSyncedAt: user.lastSyncedAt?.toISOString() ?? new Date().toISOString(),
+      emailsProcessed: user.emailsProcessed,
+      applicationsCount: user.applicationsCount,
+      activeCount: user.activeCount,
+      interviewsCount: user.interviewsCount,
+      offersCount: user.offersCount,
+      hasSynced: user.lastSyncedAt != null,
+    };
+  }
+
+  toProfile(user: UserRecord, jobSources: string[]): UserProfileResponse {
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      picture: user.picture,
+      memberSince: this.formatMemberSince(user.createdAt),
+      jobSources,
+      sync: {
+        lastSyncedAt: user.lastSyncedAt?.toISOString() ?? null,
+        emailsProcessed: user.emailsProcessed,
+        applicationsCount: user.applicationsCount,
+        activeCount: user.activeCount,
+        interviewsCount: user.interviewsCount,
+        offersCount: user.offersCount,
+        hasSynced: user.lastSyncedAt != null,
+      },
+    };
   }
 
   private async insertUser(input: UpsertGoogleUserInput): Promise<UserRecord> {
@@ -159,7 +231,23 @@ export class UsersService {
       picture: row.picture ?? undefined,
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at),
+      lastSyncedAt: row.last_synced_at
+        ? new Date(row.last_synced_at)
+        : undefined,
+      emailsProcessed: row.emails_processed ?? 0,
+      applicationsCount: row.applications_count ?? 0,
+      activeCount: row.active_count ?? 0,
+      interviewsCount: row.interviews_count ?? 0,
+      offersCount: row.offers_count ?? 0,
     };
+  }
+
+  private formatMemberSince(date: Date): string {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return `${months[date.getMonth()]} ${date.getFullYear()}`;
   }
 
   private raiseDbError(operation: string, error: { message: string }): never {

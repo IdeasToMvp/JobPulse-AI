@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/app_sync_state.dart';
+import '../../core/auth/auth_service.dart';
 import '../../core/auth/auth_state.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
@@ -19,6 +20,7 @@ class PlatformsScreen extends StatefulWidget {
 class _PlatformsScreenState extends State<PlatformsScreen> {
   late final Set<String> _selectedIds =
       Set<String>.from(AppSyncState.instance.selectedPlatformIds);
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -31,6 +33,29 @@ class _PlatformsScreenState extends State<PlatformsScreen> {
         );
       }
     });
+  }
+
+  Future<void> _onContinue() async {
+    setState(() => _isSaving = true);
+    try {
+      await AppSyncState.instance.saveJobSources(_selectedIds);
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute<void>(builder: (_) => const MainShell()),
+      );
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to save job sources')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   void _togglePlatform(String id) {
@@ -81,17 +106,9 @@ class _PlatformsScreenState extends State<PlatformsScreen> {
               SizedBox(
                 height: 48,
                 child: FilledButton(
-                  onPressed: _selectedIds.isEmpty
+                  onPressed: _selectedIds.isEmpty || _isSaving
                       ? null
-                      : () {
-                          AppSyncState.instance
-                              .updatePlatformSelection(_selectedIds);
-                          Navigator.of(context).pushReplacement(
-                            MaterialPageRoute<void>(
-                              builder: (_) => const MainShell(),
-                            ),
-                          );
-                        },
+                      : _onContinue,
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: AppColors.white,
@@ -100,10 +117,19 @@ class _PlatformsScreenState extends State<PlatformsScreen> {
                     ),
                     elevation: 0,
                   ),
-                  child: Text(
-                    'Continue',
-                    style: AppTextStyles.continueButton,
-                  ),
+                  child: _isSaving
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.white,
+                          ),
+                        )
+                      : Text(
+                          'Continue',
+                          style: AppTextStyles.continueButton,
+                        ),
                 ),
               ),
               const SizedBox(height: 8),

@@ -15,15 +15,15 @@ class DashboardSyncingView extends StatefulWidget {
 
 class _DashboardSyncingViewState extends State<DashboardSyncingView> {
   static const _steps = [
-    _SyncStep('Found 2 new emails', 'New job-related messages detected'),
-    _SyncStep('Microsoft interview update', 'Interview schedule refreshed'),
-    _SyncStep('Amazon recruiter response', 'Recruiter thread updated'),
-    _SyncStep('Dashboard updated', 'Your snapshot is current'),
+    _SyncStep('Connecting to Gmail', 'Verifying secure access'),
+    _SyncStep('Scanning inbox', 'Looking for job-related emails'),
+    _SyncStep('Matching job sources', 'Applying your platform preferences'),
+    _SyncStep('Updating dashboard', 'Refreshing your snapshot'),
   ];
 
   int _completedSteps = 0;
   double _progress = 0.12;
-  String _taskLabel = 'Checking for new emails...';
+  String _taskLabel = 'Starting Gmail sync...';
   Timer? _timer;
 
   @override
@@ -51,7 +51,7 @@ class _DashboardSyncingViewState extends State<DashboardSyncingView> {
           _progress = 0.2 + (_completedSteps / _steps.length) * 0.76;
           _taskLabel = _completedSteps < _steps.length
               ? 'Syncing Gmail...'
-              : 'Finalizing Dashboard...';
+              : 'Finalizing dashboard...';
         });
       } else {
         setState(() => _progress = 1);
@@ -72,8 +72,7 @@ class _DashboardSyncingViewState extends State<DashboardSyncingView> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'JobPulse AI is scanning your inbox for the latest job updates '
-              'and refreshing your application snapshot.',
+              'JobPulse AI is scanning your inbox using your selected job sources.',
               style: AppTextStyles.darkSubtitle.copyWith(height: 1.45),
             ),
             const SizedBox(height: 20),
@@ -122,31 +121,6 @@ class _DashboardSyncingViewState extends State<DashboardSyncingView> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Container(
-                        width: 28,
-                        height: 28,
-                        decoration: BoxDecoration(
-                          color: AppColors.secondary.withValues(alpha: 0.15),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.shield_outlined,
-                          size: 16,
-                          color: AppColors.secondary,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Secure end-to-end encryption active',
-                          style: AppTextStyles.darkStatCaption,
-                        ),
-                      ),
-                    ],
-                  ),
                 ],
               ),
             ),
@@ -159,12 +133,6 @@ class _DashboardSyncingViewState extends State<DashboardSyncingView> {
               ),
             ),
             const SizedBox(height: 12),
-            _insightRow(
-              title: 'Connected Gmail',
-              subtitle: 'Auth verified successfully',
-              done: true,
-            ),
-            const SizedBox(height: 8),
             ...List.generate(_steps.length, (index) {
               final step = _steps[index];
               final done = index < _completedSteps;
@@ -179,30 +147,6 @@ class _DashboardSyncingViewState extends State<DashboardSyncingView> {
                 ),
               );
             }),
-            if (_completedSteps >= _steps.length) ...[
-              const SizedBox(height: 8),
-              GlassCard(
-                padding: const EdgeInsets.all(14),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.check_circle_rounded,
-                      color: AppColors.success,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'JobPulse AI is up to date.',
-                        style: AppTextStyles.featureTitle.copyWith(
-                          color: AppColors.onboardingTitle,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
           ],
         ),
       ),
@@ -236,7 +180,11 @@ class _DashboardSyncingViewState extends State<DashboardSyncingView> {
               ),
             ),
             child: done
-                ? const Icon(Icons.check_rounded, size: 18, color: AppColors.secondary)
+                ? const Icon(
+                    Icons.check_rounded,
+                    size: 18,
+                    color: AppColors.secondary,
+                  )
                 : active
                     ? const SizedBox(
                         width: 18,
@@ -267,14 +215,7 @@ class _DashboardSyncingViewState extends State<DashboardSyncingView> {
                   ),
                 ),
                 const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: AppTextStyles.darkStatCaption.copyWith(
-                    color: done || active
-                        ? AppColors.dashboardMuted
-                        : AppColors.dashboardMuted.withValues(alpha: 0.7),
-                  ),
-                ),
+                Text(subtitle, style: AppTextStyles.darkStatCaption),
               ],
             ),
           ),

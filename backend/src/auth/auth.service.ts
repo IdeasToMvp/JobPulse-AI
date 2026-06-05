@@ -3,18 +3,13 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import { GoogleOAuthService } from './google-oauth.service';
-import { UserRecord } from '../users/user.entity';
+import { UserProfileResponse, UserRecord } from '../users/user.entity';
 
 export interface AuthTokensResponse {
   accessToken: string;
   tokenType: 'Bearer';
   expiresIn: string;
-  user: {
-    id: string;
-    email: string;
-    name: string;
-    picture?: string;
-  };
+  user: UserProfileResponse;
 }
 
 @Injectable()
@@ -39,16 +34,14 @@ export class AuthService {
       this.googleOAuth.consumeState(state, redirectUri);
     }
 
-    const { tokens, profile } = await this.googleOAuth.exchangeCode(
-      code,
-      redirectUri,
-    );
+    const { tokens, profile: googleProfile } =
+      await this.googleOAuth.exchangeCode(code, redirectUri);
 
     const user = await this.users.upsertGoogleUser({
-      googleId: profile.googleId,
-      email: profile.email,
-      name: profile.name,
-      picture: profile.picture,
+      googleId: googleProfile.googleId,
+      email: googleProfile.email,
+      name: googleProfile.name,
+      picture: googleProfile.picture,
       refreshToken: tokens.refreshToken,
       accessToken: tokens.accessToken,
       accessTokenExpiresAt: tokens.expiryDate
@@ -56,32 +49,35 @@ export class AuthService {
         : undefined,
     });
 
-    return this.issueSession(user);
+    const userProfile = await this.users.getProfile(user.id);
+    return this.issueSession(user, userProfile);
   }
 
   async loginWithGoogleIdToken(idToken: string): Promise<AuthTokensResponse> {
-    const profile = await this.googleOAuth.verifyIdToken(idToken);
+    const googleProfile = await this.googleOAuth.verifyIdToken(idToken);
     const user = await this.users.upsertGoogleUser({
-      googleId: profile.googleId,
-      email: profile.email,
-      name: profile.name,
-      picture: profile.picture,
+      googleId: googleProfile.googleId,
+      email: googleProfile.email,
+      name: googleProfile.name,
+      picture: googleProfile.picture,
     });
 
-    return this.issueSession(user);
+    const userProfile = await this.users.getProfile(user.id);
+    return this.issueSession(user, userProfile);
   }
 
   async getProfile(userId: string) {
-    const user = await this.users.findById(userId);
-    if (!user) return null;
-    return this.toPublicUser(user);
+    return this.users.getProfile(userId);
   }
 
   async logout(userId: string): Promise<void> {
     await this.users.clearOAuthCredentials(userId);
   }
 
-  private issueSession(user: UserRecord): AuthTokensResponse {
+  private issueSession(
+    user: UserRecord,
+    profile: Awaited<ReturnType<UsersService['getProfile']>>,
+  ): AuthTokensResponse {
     const accessToken = this.jwt.sign({
       sub: user.id,
       email: user.email,
@@ -91,16 +87,7 @@ export class AuthService {
       accessToken,
       tokenType: 'Bearer',
       expiresIn: this.config.get<string>('jwt.expiresIn') ?? '7d',
-      user: this.toPublicUser(user),
-    };
-  }
-
-  private toPublicUser(user: UserRecord) {
-    return {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      picture: user.picture,
+      user: profile ?? this.users.toProfile(user, []),
     };
   }
 }

@@ -5,6 +5,8 @@ import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import configuration from './config/configuration';
 import { SupabaseModule } from './supabase/supabase.module';
+import { SyncModule } from './sync/sync.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -13,6 +15,8 @@ import { SupabaseModule } from './supabase/supabase.module';
       load: [configuration],
     }),
     SupabaseModule,
+    UsersModule,
+    SyncModule,
     AuthModule,
   ],
   controllers: [AppController],

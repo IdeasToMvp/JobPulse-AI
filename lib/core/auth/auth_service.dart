@@ -5,7 +5,7 @@ import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 import 'package:http/http.dart' as http;
 
 import '../config/app_config.dart';
-import 'auth_user.dart';
+import '../models/user_profile.dart';
 import 'token_storage.dart';
 
 class AuthException implements Exception {
@@ -21,7 +21,7 @@ class AuthService {
 
   static final AuthService instance = AuthService._();
 
-  Future<AuthUser> signInWithGoogle() async {
+  Future<UserProfile> signInWithGoogle() async {
     final urlResponse = await http.get(
       Uri.parse('${AppConfig.apiBaseUrl}/auth/google/url'),
     );
@@ -63,7 +63,7 @@ class AuthService {
     return fetchCurrentUser(token);
   }
 
-  Future<AuthUser?> restoreSession() async {
+  Future<UserProfile?> restoreSession() async {
     final token = await TokenStorage.read();
     if (token == null) return null;
 
@@ -76,7 +76,7 @@ class AuthService {
     }
   }
 
-  Future<AuthUser> fetchCurrentUser(String token) async {
+  Future<UserProfile> fetchCurrentUser(String token) async {
     final response = await http.get(
       Uri.parse('${AppConfig.apiBaseUrl}/auth/me'),
       headers: {'Authorization': 'Bearer $token'},
@@ -92,7 +92,7 @@ class AuthService {
       throw AuthException('Invalid user profile from server');
     }
 
-    return AuthUser.fromJson(userJson);
+    return UserProfile.fromJson(userJson);
   }
 
   Future<void> signOut() async {

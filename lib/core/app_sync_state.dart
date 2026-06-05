@@ -1,5 +1,8 @@
 import 'package:flutter/foundation.dart';
 
+import 'api/user_api.dart';
+import 'models/user_profile.dart';
+
 enum SyncButtonState { idle, syncing, success }
 
 enum SyncFrequency {
@@ -15,7 +18,6 @@ enum SyncFrequency {
   final int minutes;
 }
 
-/// In-memory app state until real Gmail OAuth and API are integrated.
 class AppSyncState extends ChangeNotifier {
   AppSyncState._();
 
@@ -24,24 +26,16 @@ class AppSyncState extends ChangeNotifier {
   bool isGmailSynced = false;
   SyncButtonState syncButtonState = SyncButtonState.idle;
 
-  String userName = 'Jaswinder Singh';
-  String userEmail = 'jaswinder@gmail.com';
-  String memberSince = 'Jun 2026';
+  String userName = '';
+  String userEmail = '';
+  String memberSince = '';
 
   bool autoSyncEnabled = true;
   SyncFrequency syncFrequency = SyncFrequency.every30Minutes;
-  int lastSyncMinutesAgo = 5;
   String scanRange = 'Last 1 Year';
 
-  int emailsProcessed = 482;
-  int applicationsFound = 74;
-
-  final Set<String> selectedPlatformIds = {
-    'linkedin',
-    'naukri',
-    'indeed',
-    'career_pages',
-  };
+  UserSyncState sync = const UserSyncState();
+  final Set<String> selectedPlatformIds = {};
 
   final Map<String, bool> notificationSettings = {
     'interview_alerts': true,
@@ -52,36 +46,67 @@ class AppSyncState extends ChangeNotifier {
     'rejected_notifications': false,
   };
 
+  bool get hasSyncedData => sync.hasSynced;
+
+  int get emailsProcessed => sync.emailsProcessed;
+  int get applicationsFound => sync.applicationsCount;
+
   String get nextScheduledSyncLabel {
     if (!autoSyncEnabled || syncFrequency == SyncFrequency.manual) {
       return 'Manual only';
     }
-    final remaining = syncFrequency.minutes - lastSyncMinutesAgo;
+    if (sync.lastSyncedAt == null) return 'After first sync';
+    final minutesAgo = DateTime.now().difference(sync.lastSyncedAt!).inMinutes;
+    final remaining = syncFrequency.minutes - minutesAgo;
     if (remaining <= 0) return 'Due now';
     if (remaining < 60) return 'In $remaining minutes';
     final hours = (remaining / 60).ceil();
     return 'In $hours hour${hours == 1 ? '' : 's'}';
   }
 
-  String get lastSyncLabel =>
-      lastSyncMinutesAgo <= 1 ? 'Just now' : '$lastSyncMinutesAgo minutes ago';
+  String get lastSyncLabel {
+    final last = sync.lastSyncedAt;
+    if (last == null) return 'Never';
+    final minutesAgo = DateTime.now().difference(last).inMinutes;
+    if (minutesAgo <= 1) return 'Just now';
+    if (minutesAgo < 60) return '$minutesAgo minutes ago';
+    final hours = (minutesAgo / 60).floor();
+    if (hours < 24) return '$hours hour${hours == 1 ? '' : 's'} ago';
+    final days = (hours / 24).floor();
+    return '$days day${days == 1 ? '' : 's'} ago';
+  }
 
-  void connectGmail() {
-    if (isGmailSynced) return;
+  void applyProfile(UserProfile profile) {
+    userName = profile.name;
+    userEmail = profile.email;
+    memberSince = profile.memberSince;
     isGmailSynced = true;
+    sync = profile.sync;
+    selectedPlatformIds
+      ..clear()
+      ..addAll(profile.jobSources);
     notifyListeners();
   }
 
   void disconnectGmail() {
     isGmailSynced = false;
     syncButtonState = SyncButtonState.idle;
+    userName = '';
+    userEmail = '';
+    memberSince = '';
+    sync = const UserSyncState();
+    selectedPlatformIds.clear();
     notifyListeners();
   }
 
-  void reset() {
-    isGmailSynced = false;
-    syncButtonState = SyncButtonState.idle;
-    notifyListeners();
+  Future<void> refreshProfile() async {
+    final profile = await UserApi.instance.fetchProfile();
+    applyProfile(profile);
+  }
+
+  Future<void> saveJobSources(Set<String> ids) async {
+    final profile = await UserApi.instance.updateJobSources(ids);
+    applyProfile(profile);
   }
 
   void setAutoSync(bool value) {
@@ -99,35 +124,29 @@ class AppSyncState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void updatePlatformSelection(Set<String> ids) {
-    selectedPlatformIds
-      ..clear()
-      ..addAll(ids);
-    notifyListeners();
-  }
-
   Future<void> runSync() async {
     if (syncButtonState == SyncButtonState.syncing) return;
     syncButtonState = SyncButtonState.syncing;
     notifyListeners();
 
-    await Future<void>.delayed(const Duration(milliseconds: 4500));
+    try {
+      final result = await UserApi.instance.runSync();
+      sync = result;
+      syncButtonState = SyncButtonState.success;
+      notifyListeners();
 
-    lastSyncMinutesAgo = 0;
-    syncButtonState = SyncButtonState.success;
-    notifyListeners();
-
-    await Future<void>.delayed(const Duration(seconds: 2));
-    syncButtonState = SyncButtonState.idle;
-    lastSyncMinutesAgo = 5;
-    notifyListeners();
+      await Future<void>.delayed(const Duration(seconds: 2));
+      syncButtonState = SyncButtonState.idle;
+      notifyListeners();
+    } catch (_) {
+      syncButtonState = SyncButtonState.idle;
+      notifyListeners();
+      rethrow;
+    }
   }
 
-  void syncNow() => runSync();
-
-  void deleteAllData() {
-    emailsProcessed = 0;
-    applicationsFound = 0;
-    notifyListeners();
+  Future<void> deleteAllData() async {
+    final profile = await UserApi.instance.clearUserData();
+    applyProfile(profile);
   }
 }

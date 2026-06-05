@@ -4,6 +4,7 @@ import '../../core/app_sync_state.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import 'widgets/connect_gmail_view.dart';
+import 'widgets/dashboard_syncing_view.dart';
 import 'widgets/synced_dashboard_view.dart';
 
 class DashboardTab extends StatelessWidget {
@@ -14,10 +15,14 @@ class DashboardTab extends StatelessWidget {
     return ListenableBuilder(
       listenable: AppSyncState.instance,
       builder: (context, child) {
-        if (AppSyncState.instance.isGmailSynced) {
-          return const SyncedDashboardView();
+        final state = AppSyncState.instance;
+        if (!state.hasSyncedData) {
+          if (state.syncButtonState == SyncButtonState.syncing) {
+            return const DashboardSyncingView();
+          }
+          return const ConnectGmailView();
         }
-        return const ConnectGmailView();
+        return const SyncedDashboardView();
       },
     );
   }
@@ -28,10 +33,10 @@ class ApplicationsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const _LightPlaceholder(
+    return const _EmptyDataPlaceholder(
       icon: Icons.work_outline_rounded,
       title: 'Applications',
-      message: 'Your tracked job applications will appear here.',
+      message: 'Sync Gmail to start tracking your job applications.',
     );
   }
 }
@@ -41,16 +46,16 @@ class ActivityTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const _LightPlaceholder(
+    return const _EmptyDataPlaceholder(
       icon: Icons.notifications_outlined,
       title: 'Activity',
-      message: 'Recent inbox updates and alerts will appear here.',
+      message: 'Recent inbox updates will appear here after your first sync.',
     );
   }
 }
 
-class _LightPlaceholder extends StatelessWidget {
-  const _LightPlaceholder({
+class _EmptyDataPlaceholder extends StatelessWidget {
+  const _EmptyDataPlaceholder({
     required this.icon,
     required this.title,
     required this.message,
@@ -62,27 +67,42 @@ class _LightPlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
-      color: AppColors.dashboardBackground,
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 48, color: AppColors.secondary.withValues(alpha: 0.5)),
-              const SizedBox(height: 16),
-              Text(title, style: AppTextStyles.darkGreeting.copyWith(fontSize: 22)),
-              const SizedBox(height: 8),
-              Text(
-                message,
-                textAlign: TextAlign.center,
-                style: AppTextStyles.darkSubtitle,
+    return ListenableBuilder(
+      listenable: AppSyncState.instance,
+      builder: (context, child) {
+        final hasData = AppSyncState.instance.hasSyncedData;
+        return ColoredBox(
+          color: AppColors.dashboardBackground,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    icon,
+                    size: 48,
+                    color: AppColors.secondary.withValues(alpha: 0.5),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    title,
+                    style: AppTextStyles.darkGreeting.copyWith(fontSize: 22),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    hasData
+                        ? 'No $title data yet.'
+                        : message,
+                    textAlign: TextAlign.center,
+                    style: AppTextStyles.darkSubtitle,
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

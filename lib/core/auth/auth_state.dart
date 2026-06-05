@@ -1,11 +1,10 @@
 import 'package:flutter/foundation.dart';
 
 import '../app_sync_state.dart';
+import '../models/user_profile.dart';
 import 'auth_service.dart';
-import 'auth_user.dart';
 import 'token_storage.dart';
 
-/// Bridges persisted Google login with in-app [AppSyncState].
 class AuthState extends ChangeNotifier {
   AuthState._();
 
@@ -13,7 +12,7 @@ class AuthState extends ChangeNotifier {
 
   bool isAuthenticated = false;
   String? accessToken;
-  AuthUser? user;
+  UserProfile? user;
   bool isLoading = false;
 
   Future<bool> restoreSession() async {
@@ -63,36 +62,17 @@ class AuthState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _applySession(String token, AuthUser profile) {
+  void _applySession(String token, UserProfile profile) {
     accessToken = token;
     user = profile;
     isAuthenticated = true;
-
-    final sync = AppSyncState.instance;
-    sync.userName = profile.name;
-    sync.userEmail = profile.email;
-    sync.isGmailSynced = true;
-    sync.memberSince = _formatMemberSince(DateTime.now());
-    sync.notifyListeners();
+    AppSyncState.instance.applyProfile(profile);
   }
 
   void _clearLocal() {
     isAuthenticated = false;
     accessToken = null;
     user = null;
-
-    final sync = AppSyncState.instance;
-    sync.disconnectGmail();
-    sync.userName = '';
-    sync.userEmail = '';
-    sync.notifyListeners();
-  }
-
-  String _formatMemberSince(DateTime date) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    return '${months[date.month - 1]} ${date.year}';
+    AppSyncState.instance.disconnectGmail();
   }
 }

@@ -6,6 +6,12 @@ export interface UserRecord {
   picture?: string;
   createdAt: Date;
   updatedAt: Date;
+  lastSyncedAt?: Date;
+  emailsProcessed: number;
+  applicationsCount: number;
+  activeCount: number;
+  interviewsCount: number;
+  offersCount: number;
 }
 
 export interface DbUserRow {
@@ -16,6 +22,12 @@ export interface DbUserRow {
   picture: string | null;
   created_at: string;
   updated_at: string;
+  last_synced_at: string | null;
+  emails_processed: number;
+  applications_count: number;
+  active_count: number;
+  interviews_count: number;
+  offers_count: number;
 }
 
 export interface DbOAuthRow {
@@ -28,4 +40,22 @@ export interface DbOAuthRow {
   scopes: string[] | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface UserProfileResponse {
+  id: string;
+  email: string;
+  name: string;
+  picture?: string;
+  memberSince: string;
+  jobSources: string[];
+  sync: {
+    lastSyncedAt: string | null;
+    emailsProcessed: number;
+    applicationsCount: number;
+    activeCount: number;
+    interviewsCount: number;
+    offersCount: number;
+    hasSynced: boolean;
+  };
 }
