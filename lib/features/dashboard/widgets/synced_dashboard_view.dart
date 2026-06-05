@@ -161,10 +161,10 @@ class _DashboardContent extends StatelessWidget {
           children: [
             Expanded(
               child: _statCard(
-                icon: Icons.description_outlined,
+                icon: Icons.send_outlined,
                 iconColor: const Color(0xFF60A5FA),
-                value: '${sync.applicationsCount}',
-                label: 'Applications',
+                value: '${sync.appliedCount}',
+                label: 'Applied',
               ),
             ),
             const SizedBox(width: 10),
@@ -198,6 +198,29 @@ class _DashboardContent extends StatelessWidget {
                 value: '${sync.offersCount}',
                 label: 'Offers',
                 accentColor: AppColors.success,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _statCard(
+                icon: Icons.cancel_outlined,
+                iconColor: AppColors.error,
+                value: '${sync.rejectedCount}',
+                label: 'Rejected',
+                accentColor: AppColors.error,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _statCard(
+                icon: Icons.visibility_off_outlined,
+                iconColor: AppColors.dashboardMuted,
+                value: '${sync.ghostedCount}',
+                label: 'Ghosted',
               ),
             ),
           ],

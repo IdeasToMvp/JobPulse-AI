@@ -1,19 +1,28 @@
 import {
+  BadRequestException,
   Injectable,
   InternalServerErrorException,
   Logger,
+  NotFoundException,
 } from '@nestjs/common';
 import { SupabaseService } from '../supabase/supabase.service';
 import {
+  ApplicationDetailResponse,
+  ApplicationExtractedDetails,
   ApplicationListItem,
   ApplicationRecord,
   ApplicationStatus,
   ClassificationSource,
+  CompanyApplicationSummary,
   DbApplicationRow,
+  DbStatusHistoryRow,
   PlatformSyncStats,
   ProcessedEmailRecord,
+  StatusHistoryEntry,
+  StatusHistorySource,
   SyncResultResponse,
 } from './application.entity';
+import { ManualApplicationStatus } from './dto/update-application-status.dto';
 import { normalizeCompanyKey, rolesOverlap } from '../sync/company-name.util';
 import { formatIsoDate } from '../sync/platform-filters';
 
@@ -111,6 +120,7 @@ export class ApplicationsService {
     status: ApplicationStatus;
     lastMessageId: string;
     lastMessageAt: Date;
+    extractedDetails?: ApplicationExtractedDetails;
   }): Promise<ApplicationRecord> {
     const { data, error } = await this.supabase.db
       .from('applications')
@@ -125,11 +135,30 @@ export class ApplicationsService {
         status: input.status,
         last_message_id: input.lastMessageId,
         last_message_at: input.lastMessageAt.toISOString(),
+        extracted_details: input.extractedDetails ?? {},
       })
       .select('*')
       .single();
 
     if (error) this.raise('createApplication', error);
+    return this.mapApplication(data as DbApplicationRow);
+  }
+
+  async touchApplicationMessage(
+    applicationId: string,
+    input: { lastMessageId: string; lastMessageAt: Date },
+  ): Promise<ApplicationRecord> {
+    const { data, error } = await this.supabase.db
+      .from('applications')
+      .update({
+        last_message_id: input.lastMessageId,
+        last_message_at: input.lastMessageAt.toISOString(),
+      })
+      .eq('id', applicationId)
+      .select('*')
+      .single();
+
+    if (error) this.raise('touchApplicationMessage', error);
     return this.mapApplication(data as DbApplicationRow);
   }
 
@@ -166,14 +195,30 @@ export class ApplicationsService {
     return this.mapApplication(data as DbApplicationRow);
   }
 
-  async markApplicationsGhosted(ids: string[]): Promise<void> {
+  async markApplicationsGhosted(
+    userId: string,
+    ids: string[],
+  ): Promise<void> {
     if (ids.length === 0) return;
-    const { error } = await this.supabase.db
-      .from('applications')
-      .update({ status: 'ghosted' })
-      .in('id', ids);
 
-    if (error) this.raise('markApplicationsGhosted', error);
+    const now = new Date();
+    for (const applicationId of ids) {
+      const { error } = await this.supabase.db
+        .from('applications')
+        .update({ status: 'ghosted' })
+        .eq('id', applicationId)
+        .eq('user_id', userId);
+
+      if (error) this.raise('markApplicationsGhosted', error);
+
+      await this.appendStatusHistory({
+        userId,
+        applicationId,
+        status: 'ghosted',
+        source: 'sync',
+        changedAt: now,
+      });
+    }
   }
 
   async insertProcessedEmail(input: {
@@ -221,16 +266,281 @@ export class ApplicationsService {
 
     if (error) this.raise('listApplications', error);
 
-    return (data as DbApplicationRow[]).map((row) => ({
-      id: row.id,
-      company: row.company,
-      role: row.role ?? undefined,
+    const apps = (data as DbApplicationRow[]).map((row) =>
+      this.mapApplication(row),
+    );
+    const stats = this.buildCompanyStats(apps);
+
+    return apps.map((app) => {
+      const key = this.companyGroupKey(app);
+      const group = stats.get(key);
+      return {
+        ...this.toListItem(app),
+        companyApplyCount: group?.count,
+        companyRoles: group?.roles,
+      };
+    });
+  }
+
+  async findByIdForUser(
+    userId: string,
+    applicationId: string,
+  ): Promise<ApplicationRecord | null> {
+    const { data, error } = await this.supabase.db
+      .from('applications')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('id', applicationId)
+      .maybeSingle();
+
+    if (error) this.raise('findByIdForUser', error);
+    return data ? this.mapApplication(data as DbApplicationRow) : null;
+  }
+
+  async getApplicationDetail(
+    userId: string,
+    applicationId: string,
+  ): Promise<ApplicationDetailResponse> {
+    const app = await this.findByIdForUser(userId, applicationId);
+    if (!app) throw new NotFoundException('Application not found');
+
+    const statusHistory = await this.getStatusHistory(userId, app);
+    const companyApplications = await this.listCompanyApplications(userId, app);
+
+    return {
+      ...this.toListItem(app),
+      statusHistory,
+      companyApplications,
+    };
+  }
+
+  async updateStatusManually(
+    userId: string,
+    applicationId: string,
+    status: ManualApplicationStatus,
+  ): Promise<{
+    application: ApplicationDetailResponse;
+    previousStatus: ApplicationStatus;
+    totals: Omit<SyncResultResponse, 'scan' | 'byPlatform' | 'hasSynced'>;
+    lastSyncedAt: string | null;
+  }> {
+    const app = await this.findByIdForUser(userId, applicationId);
+    if (!app) throw new NotFoundException('Application not found');
+    if (app.status === status) {
+      throw new BadRequestException('Application is already in this status');
+    }
+
+    const previousStatus = app.status;
+    const now = new Date();
+
+    const { data, error } = await this.supabase.db
+      .from('applications')
+      .update({ status })
+      .eq('id', applicationId)
+      .eq('user_id', userId)
+      .select('*')
+      .single();
+
+    if (error) this.raise('updateStatusManually', error);
+
+    await this.appendStatusHistory({
+      userId,
+      applicationId,
+      status,
+      source: 'user',
+      changedAt: now,
+    });
+
+    const updated = this.mapApplication(data as DbApplicationRow);
+    const { totals } = await this.recomputeAggregates(userId);
+    const statusHistory = await this.getStatusHistory(userId, updated);
+
+    const { data: userRow } = await this.supabase.db
+      .from('users')
+      .select('last_synced_at')
+      .eq('id', userId)
+      .maybeSingle();
+
+    return {
+      application: {
+        ...this.toListItem(updated),
+        statusHistory,
+        companyApplications: await this.listCompanyApplications(userId, updated),
+      },
+      previousStatus,
+      totals,
+      lastSyncedAt: (userRow?.last_synced_at as string) ?? null,
+    };
+  }
+
+  async appendStatusHistory(input: {
+    userId: string;
+    applicationId: string;
+    status: ApplicationStatus;
+    source: StatusHistorySource;
+    changedAt?: Date;
+  }): Promise<void> {
+    const { error } = await this.supabase.db
+      .from('application_status_history')
+      .insert({
+        user_id: input.userId,
+        application_id: input.applicationId,
+        status: input.status,
+        source: input.source,
+        changed_at: (input.changedAt ?? new Date()).toISOString(),
+      });
+
+    if (error) {
+      if (error.message?.includes('application_status_history')) return;
+      this.raise('appendStatusHistory', error);
+    }
+  }
+
+  async getStatusHistory(
+    userId: string,
+    app: ApplicationRecord,
+  ): Promise<StatusHistoryEntry[]> {
+    const { data, error } = await this.supabase.db
+      .from('application_status_history')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('application_id', app.id)
+      .order('changed_at', { ascending: true });
+
+    if (error) {
+      if (error.message?.includes('application_status_history')) {
+        return [this.seedHistoryEntry(app)];
+      }
+      this.raise('getStatusHistory', error);
+    }
+
+    const rows = (data as DbStatusHistoryRow[]) ?? [];
+    if (rows.length === 0) {
+      return [this.seedHistoryEntry(app)];
+    }
+
+    return rows.map((row) => ({
       status: row.status as ApplicationStatus,
-      platformId: row.platform_id,
-      appliedAt: row.created_at,
-      lastMessageAt: row.last_message_at ?? undefined,
-      updatedAt: row.updated_at,
+      changedAt: row.changed_at,
+      source: row.source as StatusHistorySource,
     }));
+  }
+
+  private seedHistoryEntry(app: ApplicationRecord): StatusHistoryEntry {
+    const initialStatus =
+      app.status === 'unknown' ? ('applied' as ApplicationStatus) : app.status;
+    return {
+      status: initialStatus,
+      changedAt: app.createdAt.toISOString(),
+      source: 'sync',
+    };
+  }
+
+  private toListItem(app: ApplicationRecord): ApplicationListItem {
+    return {
+      id: app.id,
+      company: app.company,
+      role: app.role,
+      status: app.status,
+      platformId: app.platformId,
+      appliedAt: app.createdAt.toISOString(),
+      lastMessageAt: app.lastMessageAt?.toISOString(),
+      updatedAt: app.updatedAt.toISOString(),
+      extractedDetails: app.extractedDetails,
+    };
+  }
+
+  private companyGroupKey(app: ApplicationRecord): string {
+    return app.companyId ?? normalizeCompanyKey(app.company);
+  }
+
+  private buildCompanyStats(apps: ApplicationRecord[]): Map<
+    string,
+    { count: number; roles: string[] }
+  > {
+    const map = new Map<string, { count: number; roles: Set<string> }>();
+    for (const app of apps) {
+      const key = this.companyGroupKey(app);
+      if (!map.has(key)) {
+        map.set(key, { count: 0, roles: new Set() });
+      }
+      const entry = map.get(key)!;
+      entry.count += 1;
+      if (app.role) entry.roles.add(app.role);
+    }
+
+    const result = new Map<string, { count: number; roles: string[] }>();
+    for (const [key, value] of map) {
+      result.set(key, {
+        count: value.count,
+        roles: [...value.roles],
+      });
+    }
+    return result;
+  }
+
+  private async listCompanyApplications(
+    userId: string,
+    app: ApplicationRecord,
+  ): Promise<CompanyApplicationSummary[]> {
+    let query = this.supabase.db
+      .from('applications')
+      .select('id, role, status, created_at')
+      .eq('user_id', userId)
+      .neq('status', 'unknown')
+      .order('created_at', { ascending: true });
+
+    if (app.companyId) {
+      query = query.eq('company_id', app.companyId);
+    } else {
+      const key = normalizeCompanyKey(app.company);
+      const { data, error } = await this.supabase.db
+        .from('applications')
+        .select('id, role, status, created_at, company')
+        .eq('user_id', userId)
+        .neq('status', 'unknown')
+        .order('created_at', { ascending: true });
+
+      if (error) this.raise('listCompanyApplications', error);
+      return (data ?? [])
+        .filter(
+          (row) => normalizeCompanyKey(row.company as string) === key,
+        )
+        .map((row) => ({
+          id: row.id as string,
+          role: (row.role as string) ?? undefined,
+          status: row.status as ApplicationStatus,
+          appliedAt: row.created_at as string,
+        }));
+    }
+
+    const { data, error } = await query;
+    if (error) this.raise('listCompanyApplications', error);
+
+    return (data ?? []).map((row) => ({
+      id: row.id as string,
+      role: (row.role as string) ?? undefined,
+      status: row.status as ApplicationStatus,
+      appliedAt: row.created_at as string,
+    }));
+  }
+
+  private parseExtractedDetails(
+    raw: Record<string, unknown> | null | undefined,
+  ): ApplicationExtractedDetails | undefined {
+    if (!raw || Object.keys(raw).length === 0) return undefined;
+    const source = raw.source as ApplicationExtractedDetails['source'];
+    if (!source) return undefined;
+    return {
+      company: (raw.company as string) ?? undefined,
+      role: (raw.role as string) ?? undefined,
+      salary: (raw.salary as string) ?? undefined,
+      location: (raw.location as string) ?? undefined,
+      employmentType: (raw.employmentType as string) ?? undefined,
+      source,
+      confidence:
+        typeof raw.confidence === 'number' ? raw.confidence : undefined,
+    };
   }
 
   async listAllApplications(userId: string): Promise<ApplicationRecord[]> {
@@ -261,6 +571,7 @@ export class ApplicationsService {
 
   async clearUserData(userId: string): Promise<void> {
     const tables = [
+      'application_status_history',
       'company_recruiter_emails',
       'company_domains',
       'discovered_companies',
@@ -312,10 +623,12 @@ export class ApplicationsService {
       byPlatform[pid].emailsProcessed += 1;
     }
 
-    let applicationsCount = 0;
+    let statusAppliedCount = 0;
     let activeCount = 0;
     let interviewsCount = 0;
     let offersCount = 0;
+    let rejectedCount = 0;
+    let ghostedCount = 0;
 
     for (const row of apps ?? []) {
       const pid = row.platform_id as string;
@@ -328,21 +641,41 @@ export class ApplicationsService {
           offersCount: 0,
         };
       }
-      applicationsCount += 1;
       byPlatform[pid].applicationsCount += 1;
 
-      if (status === 'interview') {
-        interviewsCount += 1;
-        byPlatform[pid].interviewsCount += 1;
-      }
-      if (status === 'offer') {
-        offersCount += 1;
-        byPlatform[pid].offersCount += 1;
-      }
-      if (['applied', 'active', 'interview'].includes(status)) {
-        activeCount += 1;
+      switch (status) {
+        case 'applied':
+          statusAppliedCount += 1;
+          break;
+        case 'active':
+          activeCount += 1;
+          break;
+        case 'interview':
+          interviewsCount += 1;
+          byPlatform[pid].interviewsCount += 1;
+          break;
+        case 'offer':
+          offersCount += 1;
+          byPlatform[pid].offersCount += 1;
+          break;
+        case 'rejected':
+          rejectedCount += 1;
+          break;
+        case 'ghosted':
+          ghostedCount += 1;
+          break;
+        default:
+          break;
       }
     }
+
+    const appliedCount =
+      statusAppliedCount +
+      activeCount +
+      interviewsCount +
+      offersCount +
+      rejectedCount +
+      ghostedCount;
 
     const emailsProcessed = (emails ?? []).length;
 
@@ -350,10 +683,13 @@ export class ApplicationsService {
       totals: {
         lastSyncedAt: new Date().toISOString(),
         emailsProcessed,
-        applicationsCount,
+        applicationsCount: appliedCount,
+        appliedCount,
         activeCount,
         interviewsCount,
         offersCount,
+        rejectedCount,
+        ghostedCount,
       },
       byPlatform,
     };
@@ -390,10 +726,13 @@ export class ApplicationsService {
       .from('users')
       .update({
         emails_processed: totals.emailsProcessed,
-        applications_count: totals.applicationsCount,
+        applications_count: totals.appliedCount,
+        applied_count: totals.appliedCount,
         active_count: totals.activeCount,
         interviews_count: totals.interviewsCount,
         offers_count: totals.offersCount,
+        rejected_count: totals.rejectedCount,
+        ghosted_count: totals.ghostedCount,
       })
       .eq('id', userId);
 
@@ -458,6 +797,7 @@ export class ApplicationsService {
       companyId: row.company_id ?? undefined,
       role: row.role ?? undefined,
       status: row.status as ApplicationStatus,
+      extractedDetails: this.parseExtractedDetails(row.extracted_details),
       lastMessageId: row.last_message_id ?? undefined,
       lastMessageAt: row.last_message_at
         ? new Date(row.last_message_at)

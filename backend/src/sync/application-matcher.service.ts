@@ -1,12 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { ActivitiesService } from '../activities/activities.service';
 import {
   ApplicationRecord,
-  ApplicationStatus,
+  ApplicationExtractedDetails,
 } from '../applications/application.entity';
+import { ActivitiesService } from '../activities/activities.service';
 import { ApplicationsService } from '../applications/applications.service';
-import { ApplicationLifecycleService } from './application-lifecycle.service';
-import { rolesOverlap } from './company-name.util';
 
 export interface MatchEmailInput {
   userId: string;
@@ -17,14 +15,13 @@ export interface MatchEmailInput {
   companyId?: string;
   companyName: string;
   role?: string;
-  status: ApplicationStatus;
+  extractedDetails?: ApplicationExtractedDetails;
 }
 
 @Injectable()
 export class ApplicationMatcherService {
   constructor(
     private readonly applications: ApplicationsService,
-    private readonly lifecycle: ApplicationLifecycleService,
     private readonly activities: ActivitiesService,
   ) {}
 
@@ -35,29 +32,11 @@ export class ApplicationMatcherService {
     );
 
     if (byThread) {
-      return this.updateExisting(byThread, input);
-    }
-
-    if (input.companyId) {
-      const byCompany = await this.applications.getLatestApplicationForCompany(
-        input.userId,
-        input.companyId,
-      );
-
-      if (byCompany && rolesOverlap(byCompany.role, input.role)) {
-        return this.updateExisting(byCompany, input);
-      }
-    }
-
-    const byName =
-      await this.applications.getLatestApplicationForCompanyNameAndRole(
-        input.userId,
-        input.companyName,
-        input.role,
-      );
-
-    if (byName) {
-      return this.updateExisting(byName, input);
+      await this.applications.touchApplicationMessage(byThread.id, {
+        lastMessageId: input.messageId,
+        lastMessageAt: input.messageAt,
+      });
+      return byThread.id;
     }
 
     const created = await this.applications.createApplication({
@@ -68,9 +47,10 @@ export class ApplicationMatcherService {
       company: input.companyName,
       companyId: input.companyId,
       role: input.role,
-      status: input.status,
+      status: 'applied',
       lastMessageId: input.messageId,
       lastMessageAt: input.messageAt,
+      extractedDetails: input.extractedDetails,
     });
 
     await this.activities.recordApplicationDetected({
@@ -82,70 +62,14 @@ export class ApplicationMatcherService {
       occurredAt: input.messageAt,
     });
 
-    return created.id;
-  }
-
-  private async updateExisting(
-    existing: ApplicationRecord,
-    input: MatchEmailInput,
-  ): Promise<string> {
-    if (
-      this.lifecycle.shouldCreateNewCycle(
-        existing,
-        input.status,
-        input.role,
-        input.messageAt,
-      )
-    ) {
-      const created = await this.applications.createApplication({
-        userId: input.userId,
-        threadId: input.threadId,
-        cycleIndex: existing.cycleIndex + 1,
-        platformId: existing.platformId,
-        company: input.companyName || existing.company,
-        companyId: input.companyId,
-        role: input.role ?? existing.role,
-        status: input.status,
-        lastMessageId: input.messageId,
-        lastMessageAt: input.messageAt,
-      });
-
-      await this.activities.recordApplicationDetected({
-        userId: input.userId,
-        applicationId: created.id,
-        company: created.company,
-        role: created.role,
-        platformId: existing.platformId,
-        occurredAt: input.messageAt,
-      });
-
-      return created.id;
-    }
-
-    const nextStatus = this.lifecycle.resolveNextStatus(
-      existing.status,
-      input.status,
-    );
-    const updated = await this.applications.updateApplication(existing.id, {
-      status: nextStatus,
-      company: input.companyName || existing.company,
-      role: input.role ?? existing.role,
-      lastMessageId: input.messageId,
-      lastMessageAt: input.messageAt,
-      companyId: input.companyId,
-    });
-
-    await this.activities.recordStatusUpdate({
+    await this.applications.appendStatusHistory({
       userId: input.userId,
-      applicationId: updated.id,
-      company: updated.company,
-      role: updated.role,
-      previousStatus: existing.status,
-      newStatus: updated.status,
-      platformId: existing.platformId,
-      occurredAt: input.messageAt,
+      applicationId: created.id,
+      status: 'applied',
+      source: 'sync',
+      changedAt: input.messageAt,
     });
 
-    return updated.id;
+    return created.id;
   }
 }

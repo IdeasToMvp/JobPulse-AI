@@ -317,6 +317,55 @@ class UserApi {
         .toList();
   }
 
+  Future<ApplicationDetail> fetchApplication(String id) async {
+    final token = await _token();
+    final response = await http.get(
+      Uri.parse('${AppConfig.apiBaseUrl}/applications/$id'),
+      headers: _headers(token),
+    );
+
+    if (response.statusCode == 404) {
+      throw AuthException('Application not found');
+    }
+    if (response.statusCode != 200) {
+      throw AuthException('Failed to load application');
+    }
+
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return ApplicationDetail.fromJson(body);
+  }
+
+  Future<UpdateApplicationStatusResult> updateApplicationStatus(
+    String id,
+    String status,
+  ) async {
+    final token = await _token();
+    final response = await http.patch(
+      Uri.parse('${AppConfig.apiBaseUrl}/applications/$id/status'),
+      headers: _headers(token),
+      body: jsonEncode({'status': status}),
+    );
+
+    if (response.statusCode == 400) {
+      final body = jsonDecode(response.body) as Map<String, dynamic>?;
+      final message = body?['message'];
+      throw AuthException(
+        message is List
+            ? message.join(', ')
+            : (message as String? ?? 'Invalid status update'),
+      );
+    }
+    if (response.statusCode == 404) {
+      throw AuthException('Application not found');
+    }
+    if (response.statusCode != 200) {
+      throw AuthException('Failed to update status');
+    }
+
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return UpdateApplicationStatusResult.fromJson(body);
+  }
+
   Future<ActivityPage> fetchActivities({
     ActivityFilter filter = ActivityFilter.all,
     int offset = 0,

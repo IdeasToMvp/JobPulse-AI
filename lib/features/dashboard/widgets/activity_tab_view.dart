@@ -31,11 +31,13 @@ class _ActivityTabViewState extends State<ActivityTabView> {
   int _offset = 0;
   String? _error;
   DateTime? _lastSyncAt;
+  int _lastFeedRevision = 0;
 
   @override
   void initState() {
     super.initState();
     _lastSyncAt = AppSyncState.instance.sync.lastSyncedAt;
+    _lastFeedRevision = AppSyncState.instance.feedRevision;
     AppSyncState.instance.addListener(_onSyncStateChanged);
     _load(refresh: true, initial: true);
   }
@@ -48,8 +50,11 @@ class _ActivityTabViewState extends State<ActivityTabView> {
 
   void _onSyncStateChanged() {
     final syncAt = AppSyncState.instance.sync.lastSyncedAt;
-    if (syncAt != null && syncAt != _lastSyncAt) {
+    final feedRevision = AppSyncState.instance.feedRevision;
+    if ((syncAt != null && syncAt != _lastSyncAt) ||
+        feedRevision != _lastFeedRevision) {
       _lastSyncAt = syncAt;
+      _lastFeedRevision = feedRevision;
       _load(refresh: true);
     }
   }

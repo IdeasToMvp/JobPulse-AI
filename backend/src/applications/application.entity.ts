@@ -9,6 +9,25 @@ export type ApplicationStatus =
 
 export type ClassificationSource = 'rule' | 'ai' | 'none';
 
+export type ExtractedDetailsSource = 'rule' | 'ai' | 'mixed';
+
+export interface ApplicationExtractedDetails {
+  company?: string;
+  role?: string;
+  salary?: string;
+  location?: string;
+  employmentType?: string;
+  source: ExtractedDetailsSource;
+  confidence?: number;
+}
+
+export interface CompanyApplicationSummary {
+  id: string;
+  role?: string;
+  status: ApplicationStatus;
+  appliedAt: string;
+}
+
 export interface ApplicationRecord {
   id: string;
   userId: string;
@@ -19,6 +38,7 @@ export interface ApplicationRecord {
   companyId?: string;
   role?: string;
   status: ApplicationStatus;
+  extractedDetails?: ApplicationExtractedDetails;
   lastMessageId?: string;
   lastMessageAt?: Date;
   createdAt: Date;
@@ -62,9 +82,12 @@ export interface SyncResultResponse {
   lastSyncedAt: string;
   emailsProcessed: number;
   applicationsCount: number;
+  appliedCount: number;
   activeCount: number;
   interviewsCount: number;
   offersCount: number;
+  rejectedCount: number;
+  ghostedCount: number;
   hasSynced: boolean;
   scan: SyncScanMeta;
   byPlatform: Record<string, PlatformSyncStats>;
@@ -79,6 +102,38 @@ export interface ApplicationListItem {
   appliedAt: string;
   lastMessageAt?: string;
   updatedAt: string;
+  extractedDetails?: ApplicationExtractedDetails;
+  companyApplyCount?: number;
+  companyRoles?: string[];
+}
+
+export type StatusHistorySource = 'sync' | 'user';
+
+export interface StatusHistoryEntry {
+  status: ApplicationStatus;
+  changedAt: string;
+  source: StatusHistorySource;
+}
+
+export interface ApplicationDetailResponse extends ApplicationListItem {
+  statusHistory: StatusHistoryEntry[];
+  companyApplications?: CompanyApplicationSummary[];
+}
+
+export interface UpdateApplicationStatusResponse {
+  application: ApplicationDetailResponse;
+  sync: {
+    lastSyncedAt: string | null;
+    emailsProcessed: number;
+    applicationsCount: number;
+    activeCount: number;
+    appliedCount: number;
+    interviewsCount: number;
+    offersCount: number;
+    rejectedCount: number;
+    ghostedCount: number;
+    hasSynced: boolean;
+  };
 }
 
 export interface DbApplicationRow {
@@ -93,8 +148,18 @@ export interface DbApplicationRow {
   status: string;
   last_message_id: string | null;
   last_message_at: string | null;
+  extracted_details: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface DbStatusHistoryRow {
+  id: string;
+  user_id: string;
+  application_id: string;
+  status: string;
+  changed_at: string;
+  source: string;
 }
 
 export interface DbProcessedEmailRow {

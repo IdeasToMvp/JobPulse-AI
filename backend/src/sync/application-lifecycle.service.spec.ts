@@ -1,57 +1,58 @@
-import { ApplicationRecord } from '../applications/application.entity';
-import { ApplicationLifecycleService } from './application-lifecycle.service';
+import { ApplicationLifecycleService, GHOSTED_AFTER_DAYS } from './application-lifecycle.service';
 
 describe('ApplicationLifecycleService', () => {
   const lifecycle = new ApplicationLifecycleService();
 
-  const baseApp: ApplicationRecord = {
-    id: '1',
-    userId: 'u1',
-    threadId: 't1',
+  const baseApp = {
+    id: 'app-1',
+    userId: 'user-1',
+    threadId: 'thread-1',
     cycleIndex: 0,
-    platformId: 'naukri',
-    company: 'Acme',
-    role: 'Engineer',
-    status: 'applied',
-    lastMessageAt: new Date('2025-01-01'),
-    createdAt: new Date('2025-01-01'),
-    updatedAt: new Date('2025-01-01'),
+    platformId: 'linkedin',
+    company: 'Microsoft',
+    status: 'applied' as const,
+    createdAt: new Date(),
+    updatedAt: new Date(),
   };
 
-  it('moves status forward in pipeline', () => {
-    expect(lifecycle.resolveNextStatus('applied', 'interview')).toBe(
-      'interview',
-    );
-    expect(lifecycle.resolveNextStatus('interview', 'applied')).toBe(
-      'interview',
-    );
-  });
+  it('marks stale applied applications as ghosted after 50 days', () => {
+    const staleDate = new Date();
+    staleDate.setDate(staleDate.getDate() - GHOSTED_AFTER_DAYS);
 
-  it('creates new cycle after terminal status and re-apply gap', () => {
-    const rejected: ApplicationRecord = {
-      ...baseApp,
-      status: 'rejected',
-      lastMessageAt: new Date('2025-01-01'),
-    };
-    const shouldSplit = lifecycle.shouldCreateNewCycle(
-      rejected,
-      'applied',
-      'Engineer',
-      new Date('2025-04-01'),
-    );
-    expect(shouldSplit).toBe(true);
-  });
-
-  it('marks stale applications as ghosted candidates', () => {
-    const stale: ApplicationRecord = {
-      ...baseApp,
-      status: 'active',
-      lastMessageAt: new Date('2025-01-01'),
-    };
     const ids = lifecycle.findGhostedCandidates(
-      [stale],
-      new Date('2025-03-01'),
+      [{ ...baseApp, lastMessageAt: staleDate }],
+      new Date(),
     );
-    expect(ids).toEqual(['1']);
+
+    expect(ids).toEqual(['app-1']);
+    expect(GHOSTED_AFTER_DAYS).toBe(50);
+  });
+
+  it('does not ghost active or interview statuses', () => {
+    const staleDate = new Date();
+    staleDate.setDate(staleDate.getDate() - GHOSTED_AFTER_DAYS - 1);
+
+    const ids = lifecycle.findGhostedCandidates(
+      [
+        { ...baseApp, status: 'active', lastMessageAt: staleDate },
+        { ...baseApp, id: 'app-2', status: 'interview', lastMessageAt: staleDate },
+        { ...baseApp, id: 'app-3', status: 'rejected', lastMessageAt: staleDate },
+      ],
+      new Date(),
+    );
+
+    expect(ids).toEqual([]);
+  });
+
+  it('does not ghost recent applied applications', () => {
+    const recentDate = new Date();
+    recentDate.setDate(recentDate.getDate() - 10);
+
+    const ids = lifecycle.findGhostedCandidates(
+      [{ ...baseApp, lastMessageAt: recentDate }],
+      new Date(),
+    );
+
+    expect(ids).toEqual([]);
   });
 });

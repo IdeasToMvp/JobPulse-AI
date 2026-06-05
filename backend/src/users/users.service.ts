@@ -218,6 +218,7 @@ export class UsersService {
   async resetSyncData(userId: string): Promise<void> {
     const tables = [
       'activity_events',
+      'application_status_history',
       'company_recruiter_emails',
       'company_domains',
       'discovered_companies',
@@ -243,9 +244,12 @@ export class UsersService {
         sync_to_date: null,
         emails_processed: 0,
         applications_count: 0,
+        applied_count: 0,
         active_count: 0,
         interviews_count: 0,
         offers_count: 0,
+        rejected_count: 0,
+        ghosted_count: 0,
       })
       .eq('id', userId);
 
@@ -257,9 +261,12 @@ export class UsersService {
       lastSyncedAt: user.lastSyncedAt?.toISOString() ?? new Date().toISOString(),
       emailsProcessed: user.emailsProcessed,
       applicationsCount: user.applicationsCount,
+      appliedCount: user.applicationsCount,
       activeCount: user.activeCount,
       interviewsCount: user.interviewsCount,
       offersCount: user.offersCount,
+      rejectedCount: user.rejectedCount,
+      ghostedCount: user.ghostedCount,
       hasSynced: user.lastSyncedAt != null,
     };
   }
@@ -272,9 +279,12 @@ export class UsersService {
       UserRecord,
       | 'emailsProcessed'
       | 'applicationsCount'
+      | 'appliedCount'
       | 'activeCount'
       | 'interviewsCount'
       | 'offersCount'
+      | 'rejectedCount'
+      | 'ghostedCount'
     >,
   ): UserProfileResponse {
     const sync: UserProfileResponse['sync'] = {
@@ -282,9 +292,15 @@ export class UsersService {
       emailsProcessed: liveTotals?.emailsProcessed ?? user.emailsProcessed,
       applicationsCount:
         liveTotals?.applicationsCount ?? user.applicationsCount,
+      appliedCount:
+        liveTotals?.appliedCount ??
+        liveTotals?.applicationsCount ??
+        user.applicationsCount,
       activeCount: liveTotals?.activeCount ?? user.activeCount,
       interviewsCount: liveTotals?.interviewsCount ?? user.interviewsCount,
       offersCount: liveTotals?.offersCount ?? user.offersCount,
+      rejectedCount: liveTotals?.rejectedCount ?? user.rejectedCount,
+      ghostedCount: liveTotals?.ghostedCount ?? user.ghostedCount,
       hasSynced: user.lastSyncedAt != null,
     };
 
@@ -324,17 +340,23 @@ export class UsersService {
       UserRecord,
       | 'emailsProcessed'
       | 'applicationsCount'
+      | 'appliedCount'
       | 'activeCount'
       | 'interviewsCount'
       | 'offersCount'
+      | 'rejectedCount'
+      | 'ghostedCount'
     >,
   ): boolean {
     return (
       user.emailsProcessed !== totals.emailsProcessed ||
       user.applicationsCount !== totals.applicationsCount ||
+      user.applicationsCount !== totals.appliedCount ||
       user.activeCount !== totals.activeCount ||
       user.interviewsCount !== totals.interviewsCount ||
-      user.offersCount !== totals.offersCount
+      user.offersCount !== totals.offersCount ||
+      user.rejectedCount !== totals.rejectedCount ||
+      user.ghostedCount !== totals.ghostedCount
     );
   }
 
@@ -441,9 +463,12 @@ export class UsersService {
       syncToDate: row.sync_to_date ? new Date(row.sync_to_date) : undefined,
       emailsProcessed: row.emails_processed ?? 0,
       applicationsCount: row.applications_count ?? 0,
+      appliedCount: row.applications_count ?? 0,
       activeCount: row.active_count ?? 0,
       interviewsCount: row.interviews_count ?? 0,
       offersCount: row.offers_count ?? 0,
+      rejectedCount: row.rejected_count ?? 0,
+      ghostedCount: row.ghosted_count ?? 0,
       autoSyncEnabled: row.auto_sync_enabled ?? true,
       syncFrequencyMinutes: row.sync_frequency_minutes ?? 30,
       initialSyncMode: (row.initial_sync_mode as InitialSyncMode) ?? undefined,

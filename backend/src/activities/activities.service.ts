@@ -1,7 +1,9 @@
 import {
+  Inject,
   Injectable,
   InternalServerErrorException,
   Logger,
+  forwardRef,
 } from '@nestjs/common';
 import { ApplicationStatus } from '../applications/application.entity';
 import { ApplicationsService } from '../applications/applications.service';
@@ -23,6 +25,7 @@ export class ActivitiesService {
 
   constructor(
     private readonly supabase: SupabaseService,
+    @Inject(forwardRef(() => ApplicationsService))
     private readonly applications: ApplicationsService,
   ) {}
 
@@ -105,7 +108,7 @@ export class ActivitiesService {
       userId: input.userId,
       type: 'status_update',
       title: input.company,
-      description: `${from} → ${to}`,
+      description: `Status changed from ${from} → ${to}`,
       company: input.company,
       role: input.role,
       applicationId: input.applicationId,

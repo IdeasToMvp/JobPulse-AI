@@ -1,74 +1,51 @@
 import { Injectable } from '@nestjs/common';
-import { ApplicationStatus } from '../applications/application.entity';
 
 export type RuleConfidence = 'high' | 'low' | 'none';
 
-export interface RuleClassification {
-  status: ApplicationStatus | 'unknown';
+export interface ApplyDetectionResult {
+  isApply: boolean;
+  confidence: RuleConfidence;
   company: string;
   role?: string;
-  confidence: RuleConfidence;
 }
 
-const STATUS_RULES: { status: ApplicationStatus; pattern: RegExp }[] = [
-  {
-    status: 'rejected',
-    pattern:
-      /unfortunately|not moving forward|regret to inform|other candidates|position has been filled|no longer under consideration/i,
-  },
-  {
-    status: 'offer',
-    pattern:
-      /offer letter|pleased to extend|compensation package|congratulations.*offer|we are offering/i,
-  },
-  {
-    status: 'interview',
-    pattern:
-      /interview invitation|schedule.*interview|phone screen|onsite|virtual meeting|meet the team|coding interview/i,
-  },
-  {
-    status: 'active',
-    pattern:
-      /assessment invitation|coding challenge|take[- ]home|hackerrank|codility|online test|technical assessment/i,
-  },
-  {
-    status: 'applied',
-    pattern:
-      /application received|thank you for applying|we received your application|successfully applied|application submitted/i,
-  },
-];
+const APPLY_PATTERN =
+  /application received|thank you for applying|we received your application|successfully applied|application submitted|your application for|applied successfully|application has been submitted/i;
 
 const ROLE_PATTERN =
   /(?:for|as|position[:\s-]+|role[:\s-]+)([A-Za-z0-9][A-Za-z0-9\s/&.-]{2,60})/i;
 
 @Injectable()
 export class RuleEngineService {
-  classify(from: string, subject: string): RuleClassification {
+  detectApplyConfirmation(from: string, subject: string): ApplyDetectionResult {
     const text = `${subject} ${from}`;
-    let matched: ApplicationStatus | 'unknown' = 'unknown';
-    let confidence: RuleConfidence = 'none';
-
-    for (const rule of STATUS_RULES) {
-      if (rule.pattern.test(text)) {
-        matched = rule.status;
-        confidence = 'high';
-        break;
-      }
-    }
-
-    if (matched === 'unknown' && this.looksJobRelated(text)) {
-      matched = 'applied';
-      confidence = 'low';
-    }
-
     const company = this.extractCompany(from, subject);
     const role = this.extractRole(subject);
 
-    return { status: matched, company, role, confidence };
+    if (APPLY_PATTERN.test(text)) {
+      return { isApply: true, confidence: 'high', company, role };
+    }
+
+    if (this.looksJobRelated(text)) {
+      return { isApply: true, confidence: 'low', company, role };
+    }
+
+    return { isApply: false, confidence: 'none', company, role };
+  }
+
+  /** @deprecated Use detectApplyConfirmation for sync v2 */
+  classify(from: string, subject: string) {
+    const result = this.detectApplyConfirmation(from, subject);
+    return {
+      status: result.isApply ? ('applied' as const) : ('unknown' as const),
+      company: result.company,
+      role: result.role,
+      confidence: result.confidence,
+    };
   }
 
   private looksJobRelated(text: string): boolean {
-    return /application|applied|interview|assessment|recruiter|hiring|job|role|position/i.test(
+    return /application|applied|thank you for applying|job application|successfully applied/i.test(
       text,
     );
   }

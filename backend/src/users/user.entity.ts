@@ -29,9 +29,12 @@ export interface UserRecord {
   syncToDate?: Date;
   emailsProcessed: number;
   applicationsCount: number;
+  appliedCount: number;
   activeCount: number;
   interviewsCount: number;
   offersCount: number;
+  rejectedCount: number;
+  ghostedCount: number;
   autoSyncEnabled: boolean;
   syncFrequencyMinutes: number;
   initialSyncMode?: InitialSyncMode;
@@ -51,9 +54,12 @@ export interface DbUserRow {
   sync_to_date: string | null;
   emails_processed: number;
   applications_count: number;
+  applied_count: number;
   active_count: number;
   interviews_count: number;
   offers_count: number;
+  rejected_count: number;
+  ghosted_count: number;
   auto_sync_enabled: boolean;
   sync_frequency_minutes: number;
   initial_sync_mode: string | null;
@@ -87,9 +93,12 @@ export interface UserProfileResponse {
     lastSyncedAt: string | null;
     emailsProcessed: number;
     applicationsCount: number;
+    appliedCount: number;
     activeCount: number;
     interviewsCount: number;
     offersCount: number;
+    rejectedCount: number;
+    ghostedCount: number;
     hasSynced: boolean;
     scan?: SyncScanMeta;
     byPlatform?: Record<string, PlatformSyncStats>;

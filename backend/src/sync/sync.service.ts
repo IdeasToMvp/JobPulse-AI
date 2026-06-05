@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { ActivitiesService } from '../activities/activities.service';
 import {
+  ApplicationExtractedDetails,
   ApplicationStatus,
   SyncResultResponse,
 } from '../applications/application.entity';
@@ -40,8 +41,6 @@ import {
 } from './platform-filters';
 import { RuleEngineService } from './rule-engine.service';
 import { SyncCancellationService } from './sync-cancellation.service';
-
-const AI_CONFIDENCE_THRESHOLD = 0.7;
 
 @Injectable()
 export class SyncService {
@@ -197,59 +196,51 @@ export class SyncService {
           maxInternalDate = meta.internalDate;
         }
 
-        const ruleResult = this.ruleEngine.classify(meta.from, meta.subject);
-        let status: ApplicationStatus | 'unknown' = ruleResult.status;
+        const ruleResult = this.ruleEngine.detectApplyConfirmation(
+          meta.from,
+          meta.subject,
+        );
         let company = ruleResult.company;
         let role = ruleResult.role;
-        let source: 'rule' | 'ai' | 'none' = 'rule';
+        let isApply = ruleResult.isApply;
+        let extractedDetails: ApplicationExtractedDetails = {
+          company:
+            ruleResult.company !== 'Unknown Company'
+              ? ruleResult.company
+              : undefined,
+          role: ruleResult.role,
+          source: 'rule',
+        };
+        let source: 'rule' | 'ai' | 'mixed' = 'rule';
         let applicationId: string | undefined;
         let companyId: string | undefined;
 
-        if (
+        const needsAi =
           ruleResult.confidence === 'none' ||
-          ruleResult.confidence === 'low'
-        ) {
+          ruleResult.confidence === 'low' ||
+          company === 'Unknown Company' ||
+          !role;
+
+        if (needsAi) {
           this.cancellation.throwIfCancelled(userId);
-          const aiResult = await this.aiClassifier.classify({
+          const aiResult = await this.aiClassifier.extractApplicationDetails({
             from: meta.from,
             subject: meta.subject,
             platformId,
             ruleConfidence: ruleResult.confidence,
+            ruleIsApply: ruleResult.isApply,
           });
           if (aiResult) {
             aiCalls += 1;
-            if (aiResult.confidence >= AI_CONFIDENCE_THRESHOLD) {
-              status = aiResult.status;
-              company = aiResult.company;
-              role = aiResult.role;
-              source = 'ai';
-            } else if (
-              aiResult.confidence >= 0.5 &&
-              ['interview', 'offer', 'active'].includes(aiResult.status)
-            ) {
-              status = 'unknown';
-              source = 'ai';
-              const label =
-                aiResult.status === 'interview'
-                  ? 'Possible Interview Invitation detected'
-                  : aiResult.status === 'offer'
-                    ? 'Possible Job Offer detected'
-                    : 'Possible application update detected';
-              await this.activities.recordSuggestion({
-                userId,
-                company: aiResult.company ?? company ?? 'Unknown Company',
-                role: aiResult.role ?? role,
-                suggestion: label,
-                platformId,
-                occurredAt: meta.internalDate,
-              });
-            } else {
-              status = 'unknown';
-              source = 'ai';
-            }
-          } else {
-            status = 'unknown';
-            source = 'none';
+            const merged = this.aiClassifier.mergeExtractedDetails(
+              ruleResult,
+              aiResult,
+            );
+            isApply = merged.isApply;
+            company = merged.company;
+            role = merged.role;
+            extractedDetails = merged.extractedDetails;
+            source = merged.source;
           }
         }
 
@@ -259,7 +250,6 @@ export class SyncService {
               userId,
               companyName: company,
               platformId,
-              status,
               fromAddress: meta.from,
               messageAt: meta.internalDate,
             },
@@ -267,17 +257,21 @@ export class SyncService {
           companyId = discovered?.id;
         }
 
-        if (status !== 'unknown') {
+        const classificationStatus: ApplicationStatus | 'unknown' = isApply
+          ? 'applied'
+          : 'unknown';
+
+        if (isApply) {
           applicationId = await this.applicationMatcher.matchAndUpsert({
             userId,
             platformId,
             threadId: meta.threadId,
             messageId: meta.id,
             messageAt: meta.internalDate,
-            status,
             companyName: company,
             role,
             companyId,
+            extractedDetails,
           });
         }
 
@@ -289,8 +283,8 @@ export class SyncService {
           subject: meta.subject,
           fromAddress: meta.from,
           internalDate: meta.internalDate,
-          classificationStatus: status,
-          classificationSource: source,
+          classificationStatus,
+          classificationSource: source === 'mixed' ? 'ai' : source,
           applicationId,
           syncPhase: 'platform',
         });
@@ -376,58 +370,10 @@ export class SyncService {
           companyMessageCount += 1;
           companyEmailsProcessed += 1;
 
-          const ruleResult = this.ruleEngine.classify(meta.from, meta.subject);
-          let status: ApplicationStatus | 'unknown' = ruleResult.status;
-          let role = ruleResult.role;
-          let source: 'rule' | 'ai' | 'none' = 'rule';
-          let applicationId: string | undefined;
-
-          if (
-            ruleResult.confidence === 'none' ||
-            ruleResult.confidence === 'low'
-          ) {
-            this.cancellation.throwIfCancelled(userId);
-            const aiResult = await this.aiClassifier.classify({
-              from: meta.from,
-              subject: meta.subject,
-              platformId: 'company_direct',
-              ruleConfidence: ruleResult.confidence,
-            });
-            if (aiResult) {
-              aiCalls += 1;
-              if (aiResult.confidence >= AI_CONFIDENCE_THRESHOLD) {
-                status = aiResult.status;
-                role = aiResult.role ?? role;
-                source = 'ai';
-              } else if (
-                aiResult.confidence >= 0.5 &&
-                ['interview', 'offer', 'active'].includes(aiResult.status)
-              ) {
-                status = 'unknown';
-                source = 'ai';
-                const label =
-                  aiResult.status === 'interview'
-                    ? 'Possible Interview Invitation detected'
-                    : aiResult.status === 'offer'
-                      ? 'Possible Job Offer detected'
-                      : 'Possible application update detected';
-                await this.activities.recordSuggestion({
-                  userId,
-                  company: company.canonicalName,
-                  role: aiResult.role ?? role,
-                  suggestion: label,
-                  platformId: 'company_direct',
-                  occurredAt: meta.internalDate,
-                });
-              } else {
-                status = 'unknown';
-                source = 'ai';
-              }
-            } else {
-              status = 'unknown';
-              source = 'none';
-            }
-          }
+          const ruleResult = this.ruleEngine.detectApplyConfirmation(
+            meta.from,
+            meta.subject,
+          );
 
           await this.companyDiscovery.learnRecruiterEmail({
             userId,
@@ -435,20 +381,6 @@ export class SyncService {
             fromAddress: meta.from,
             messageAt: meta.internalDate,
           });
-
-          if (status !== 'unknown') {
-            applicationId = await this.applicationMatcher.matchAndUpsert({
-              userId,
-              platformId: 'company_direct',
-              threadId: meta.threadId,
-              messageId: meta.id,
-              messageAt: meta.internalDate,
-              companyId: company.id,
-              companyName: company.canonicalName,
-              role,
-              status,
-            });
-          }
 
           await this.applications.insertProcessedEmail({
             userId,
@@ -458,9 +390,8 @@ export class SyncService {
             subject: meta.subject,
             fromAddress: meta.from,
             internalDate: meta.internalDate,
-            classificationStatus: status,
-            classificationSource: source,
-            applicationId,
+            classificationStatus: ruleResult.isApply ? 'applied' : 'unknown',
+            classificationSource: 'rule',
             syncPhase: 'company',
           });
         }
@@ -491,7 +422,7 @@ export class SyncService {
       allApps,
       new Date(),
     );
-    await this.applications.markApplicationsGhosted(ghostedIds);
+    await this.applications.markApplicationsGhosted(userId, ghostedIds);
 
     const now = new Date();
     const syncSince = user.lastSyncedAt ?? new Date(0);

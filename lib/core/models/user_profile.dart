@@ -81,9 +81,12 @@ class UserSyncState {
     this.lastSyncedAt,
     this.emailsProcessed = 0,
     this.applicationsCount = 0,
+    this.appliedCount = 0,
     this.activeCount = 0,
     this.interviewsCount = 0,
     this.offersCount = 0,
+    this.rejectedCount = 0,
+    this.ghostedCount = 0,
     this.hasSynced = false,
     this.scan,
     this.byPlatform = const {},
@@ -92,9 +95,12 @@ class UserSyncState {
   final DateTime? lastSyncedAt;
   final int emailsProcessed;
   final int applicationsCount;
+  final int appliedCount;
   final int activeCount;
   final int interviewsCount;
   final int offersCount;
+  final int rejectedCount;
+  final int ghostedCount;
   final bool hasSynced;
   final SyncScanMeta? scan;
   final Map<String, PlatformSyncStats> byPlatform;
@@ -114,9 +120,12 @@ class UserSyncState {
           lastSyncedRaw != null ? DateTime.tryParse(lastSyncedRaw) : null,
       emailsProcessed: json['emailsProcessed'] as int? ?? 0,
       applicationsCount: json['applicationsCount'] as int? ?? 0,
+      appliedCount: json['appliedCount'] as int? ?? 0,
       activeCount: json['activeCount'] as int? ?? 0,
       interviewsCount: json['interviewsCount'] as int? ?? 0,
       offersCount: json['offersCount'] as int? ?? 0,
+      rejectedCount: json['rejectedCount'] as int? ?? 0,
+      ghostedCount: json['ghostedCount'] as int? ?? 0,
       hasSynced: json['hasSynced'] as bool? ?? false,
       scan: json['scan'] != null
           ? SyncScanMeta.fromJson(json['scan'] as Map<String, dynamic>)

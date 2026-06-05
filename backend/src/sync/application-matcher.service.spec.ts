@@ -1,28 +1,24 @@
 import { ApplicationMatcherService } from './application-matcher.service';
 import { ApplicationsService } from '../applications/applications.service';
-import { ApplicationLifecycleService } from './application-lifecycle.service';
 import { ActivitiesService } from '../activities/activities.service';
 
 describe('ApplicationMatcherService', () => {
   const applications = {
     getLatestApplicationForThread: jest.fn(),
-    getLatestApplicationForCompany: jest.fn(),
-    getLatestApplicationForCompanyNameAndRole: jest.fn(),
     createApplication: jest.fn(),
-    updateApplication: jest.fn(),
+    touchApplicationMessage: jest.fn(),
+    appendStatusHistory: jest.fn().mockResolvedValue(undefined),
   } as unknown as ApplicationsService;
 
   const activities = {
     recordApplicationDetected: jest.fn().mockResolvedValue(undefined),
-    recordStatusUpdate: jest.fn().mockResolvedValue(undefined),
   } as unknown as ActivitiesService;
 
-  const lifecycle = new ApplicationLifecycleService();
   let matcher: ApplicationMatcherService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    matcher = new ApplicationMatcherService(applications, lifecycle, activities);
+    matcher = new ApplicationMatcherService(applications, activities);
   });
 
   const baseInput = {
@@ -30,14 +26,37 @@ describe('ApplicationMatcherService', () => {
     threadId: 'thread-1',
     messageId: 'msg-1',
     messageAt: new Date('2025-06-01'),
-    platformId: 'company_direct',
-    companyId: 'company-1',
+    platformId: 'linkedin',
     companyName: 'Microsoft',
     role: 'Software Engineer',
-    status: 'interview' as const,
   };
 
-  it('updates application matched by thread', async () => {
+  it('creates application when thread is new', async () => {
+    applications.getLatestApplicationForThread = jest
+      .fn()
+      .mockResolvedValue(null);
+    applications.createApplication = jest.fn().mockResolvedValue({
+      id: 'app-new',
+      company: 'Microsoft',
+      role: 'Software Engineer',
+      status: 'applied',
+    });
+
+    const id = await matcher.matchAndUpsert(baseInput);
+
+    expect(id).toBe('app-new');
+    expect(applications.createApplication).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'applied',
+        threadId: 'thread-1',
+        cycleIndex: 0,
+      }),
+    );
+    expect(applications.appendStatusHistory).toHaveBeenCalled();
+    expect(activities.recordApplicationDetected).toHaveBeenCalled();
+  });
+
+  it('touches existing application for same thread without creating', async () => {
     applications.getLatestApplicationForThread = jest
       .fn()
       .mockResolvedValue({
@@ -51,91 +70,38 @@ describe('ApplicationMatcherService', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
       });
-    applications.updateApplication = jest.fn().mockResolvedValue({
+    applications.touchApplicationMessage = jest.fn().mockResolvedValue({
       id: 'app-1',
-      company: 'Microsoft',
-      role: 'Software Engineer',
-      status: 'interview',
     });
 
-    const id = await matcher.matchAndUpsert(baseInput);
+    const id = await matcher.matchAndUpsert({
+      ...baseInput,
+      messageId: 'msg-2',
+    });
 
     expect(id).toBe('app-1');
-    expect(applications.updateApplication).toHaveBeenCalled();
+    expect(applications.touchApplicationMessage).toHaveBeenCalled();
     expect(applications.createApplication).not.toHaveBeenCalled();
+    expect(activities.recordApplicationDetected).not.toHaveBeenCalled();
   });
 
-  it('creates application when no thread or company match', async () => {
+  it('creates new application for re-apply on different thread', async () => {
     applications.getLatestApplicationForThread = jest
       .fn()
       .mockResolvedValue(null);
-    applications.getLatestApplicationForCompany = jest
-      .fn()
-      .mockResolvedValue(null);
-    applications.getLatestApplicationForCompanyNameAndRole = jest
-      .fn()
-      .mockResolvedValue(null);
-    applications.createApplication = jest
-      .fn()
-      .mockResolvedValue({
-        id: 'app-new',
-        company: 'Microsoft',
-        role: 'Software Engineer',
-      });
-
-    const id = await matcher.matchAndUpsert(baseInput);
-
-    expect(id).toBe('app-new');
-    expect(applications.createApplication).toHaveBeenCalledWith(
-      expect.objectContaining({
-        platformId: 'company_direct',
-        companyId: 'company-1',
-      }),
-    );
-  });
-
-  it('updates application matched by company name and role across threads', async () => {
-    applications.getLatestApplicationForThread = jest
-      .fn()
-      .mockResolvedValue(null);
-    applications.getLatestApplicationForCompany = jest
-      .fn()
-      .mockResolvedValue(null);
-    applications.getLatestApplicationForCompanyNameAndRole = jest
-      .fn()
-      .mockResolvedValue({
-        id: 'app-linkedin',
-        userId: 'user-1',
-        threadId: 'thread-old',
-        cycleIndex: 0,
-        platformId: 'linkedin',
-        company: 'Fast-Growing Startup',
-        role: 'Full Stack Role',
-        status: 'applied',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-    applications.updateApplication = jest
-      .fn()
-      .mockResolvedValue({
-        id: 'app-linkedin',
-        company: 'Fast-Growing Startup',
-        role: 'Full Stack Role',
-        status: 'active',
-      });
+    applications.createApplication = jest.fn().mockResolvedValue({
+      id: 'app-reapply',
+      company: 'Microsoft',
+      role: 'Software Engineer',
+      status: 'applied',
+    });
 
     const id = await matcher.matchAndUpsert({
       ...baseInput,
       threadId: 'thread-new',
-      platformId: 'linkedin',
-      companyId: undefined,
-      companyName: 'Fast-Growing Startup',
-      role: 'Full Stack Role',
-      status: 'active',
     });
 
-    expect(id).toBe('app-linkedin');
-    expect(applications.updateApplication).toHaveBeenCalled();
-    expect(applications.createApplication).not.toHaveBeenCalled();
+    expect(id).toBe('app-reapply');
+    expect(applications.createApplication).toHaveBeenCalled();
   });
 });

@@ -56,6 +56,7 @@ class AppSyncState extends ChangeNotifier {
   String scanRange = 'Last 1 Year';
 
   UserSyncState sync = const UserSyncState();
+  int feedRevision = 0;
   final Set<String> selectedPlatformIds = {};
 
   final Map<String, bool> notificationSettings = {
@@ -147,6 +148,39 @@ class AppSyncState extends ChangeNotifier {
     selectedPlatformIds
       ..clear()
       ..addAll(profile.jobSources);
+    notifyListeners();
+  }
+
+  void applySyncFromStatusUpdate(Map<String, dynamic> syncJson) {
+    final current = sync;
+    final lastSyncedRaw = syncJson['lastSyncedAt'] as String?;
+    sync = UserSyncState(
+      lastSyncedAt: lastSyncedRaw != null
+          ? DateTime.tryParse(lastSyncedRaw)
+          : current.lastSyncedAt,
+      emailsProcessed:
+          syncJson['emailsProcessed'] as int? ?? current.emailsProcessed,
+      appliedCount: syncJson['appliedCount'] as int? ??
+          syncJson['applicationsCount'] as int? ??
+          current.appliedCount,
+      applicationsCount: syncJson['applicationsCount'] as int? ??
+          syncJson['appliedCount'] as int? ??
+          current.applicationsCount,
+      activeCount: syncJson['activeCount'] as int? ?? current.activeCount,
+      interviewsCount:
+          syncJson['interviewsCount'] as int? ?? current.interviewsCount,
+      offersCount: syncJson['offersCount'] as int? ?? current.offersCount,
+      rejectedCount: syncJson['rejectedCount'] as int? ?? current.rejectedCount,
+      ghostedCount: syncJson['ghostedCount'] as int? ?? current.ghostedCount,
+      hasSynced: syncJson['hasSynced'] as bool? ?? current.hasSynced,
+      scan: current.scan,
+      byPlatform: current.byPlatform,
+    );
+    notifyListeners();
+  }
+
+  void bumpFeedRevision() {
+    feedRevision++;
     notifyListeners();
   }
 

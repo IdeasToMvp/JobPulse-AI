@@ -27,7 +27,6 @@ export class CompanyDiscoveryService {
     userId: string;
     companyName: string;
     platformId: string;
-    status: ApplicationStatus | 'unknown';
     fromAddress?: string;
     messageAt: Date;
   }): Promise<DiscoveredCompanyRecord | null> {
@@ -35,8 +34,6 @@ export class CompanyDiscoveryService {
     if (!key || key === 'unknowncompany') return null;
 
     const now = input.messageAt.toISOString();
-    const status =
-      input.status !== 'unknown' ? input.status : undefined;
 
     const { data: existing, error: fetchError } = await this.supabase.db
       .from('discovered_companies')
@@ -54,7 +51,6 @@ export class CompanyDiscoveryService {
         last_seen_at: now,
         canonical_name: input.companyName,
       };
-      if (status) updates.application_status = status;
       if (!existing.primary_platform_id) {
         updates.primary_platform_id = input.platformId;
       }
@@ -76,7 +72,7 @@ export class CompanyDiscoveryService {
           canonical_name: input.companyName,
           normalized_key: key,
           primary_platform_id: input.platformId,
-          application_status: status ?? null,
+          application_status: null,
           first_seen_at: now,
           last_seen_at: now,
         })

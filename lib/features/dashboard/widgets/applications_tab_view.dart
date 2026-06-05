@@ -7,6 +7,9 @@ import '../../../core/models/application.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/glass_card.dart';
+import 'application_detail_sheet.dart';
+import 'application_status_badge.dart';
+import 'update_status_sheet.dart';
 
 const _platformLabels = {
   'linkedin': 'LinkedIn',
@@ -22,7 +25,6 @@ const _platformLabels = {
 };
 
 const _statusFilters = [
-  _StatusFilter(id: 'all', label: 'All'),
   _StatusFilter(id: 'applied', label: 'Applied'),
   _StatusFilter(id: 'active', label: 'Active'),
   _StatusFilter(id: 'interview', label: 'Interview'),
@@ -43,12 +45,14 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
   bool _loading = true;
   String? _error;
   DateTime? _lastSyncAt;
-  String _statusFilter = 'all';
+  int _lastFeedRevision = 0;
+  String _statusFilter = 'applied';
 
   @override
   void initState() {
     super.initState();
     _lastSyncAt = AppSyncState.instance.sync.lastSyncedAt;
+    _lastFeedRevision = AppSyncState.instance.feedRevision;
     AppSyncState.instance.addListener(_onSyncStateChanged);
     _load();
   }
@@ -61,18 +65,63 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
 
   void _onSyncStateChanged() {
     final syncAt = AppSyncState.instance.sync.lastSyncedAt;
-    if (syncAt != null && syncAt != _lastSyncAt) {
+    final feedRevision = AppSyncState.instance.feedRevision;
+    if ((syncAt != null && syncAt != _lastSyncAt) ||
+        feedRevision != _lastFeedRevision) {
       _lastSyncAt = syncAt;
+      _lastFeedRevision = feedRevision;
       _load();
     }
+  }
+
+  void _onApplicationUpdated(ApplicationDetail detail) {
+    setState(() {
+      final index = _applications.indexWhere((a) => a.id == detail.id);
+      if (index >= 0) {
+        _applications[index] = detail;
+      }
+    });
+  }
+
+  void _openStatusUpdate(JobApplication app) {
+    UpdateStatusSheet.show(
+      context,
+      application: app,
+      onUpdated: _onApplicationUpdated,
+    );
   }
 
   List<JobApplication> get _filteredApplications {
     final sorted = [..._applications]
       ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
 
-    if (_statusFilter == 'all') return sorted;
+    if (_statusFilter == 'applied') return sorted;
     return sorted.where((a) => a.status == _statusFilter).toList();
+  }
+
+  int _countForStatus(String statusId) {
+    final sync = AppSyncState.instance.sync;
+    switch (statusId) {
+      case 'applied':
+        return sync.appliedCount;
+      case 'active':
+        return sync.activeCount;
+      case 'interview':
+        return sync.interviewsCount;
+      case 'offer':
+        return sync.offersCount;
+      case 'rejected':
+        return sync.rejectedCount;
+      case 'ghosted':
+        return sync.ghostedCount;
+      default:
+        return 0;
+    }
+  }
+
+  String _filterLabel(_StatusFilter filter) {
+    final count = _countForStatus(filter.id);
+    return '${filter.label} ($count)';
   }
 
   Future<void> _load() async {
@@ -166,7 +215,7 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
                               for (var i = 0; i < _statusFilters.length; i++) ...[
                                 if (i > 0) const SizedBox(width: 8),
                                 _FilterChip(
-                                  label: _statusFilters[i].label,
+                                  label: _filterLabel(_statusFilters[i]),
                                   selected:
                                       _statusFilter == _statusFilters[i].id,
                                   onTap: () => setState(
@@ -206,6 +255,7 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
                         final app = filtered[index];
                         return GlassCard(
                           padding: const EdgeInsets.all(14),
+                          onTap: () => ApplicationDetailSheet.show(context, app),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -217,6 +267,18 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
                                       app.company,
                                       style: AppTextStyles.featureTitle,
                                     ),
+                                    if ((app.companyApplyCount ?? 0) > 1) ...[
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '${app.companyApplyCount} applications'
+                                        '${app.companyRoles != null && app.companyRoles!.isNotEmpty ? ' · ${app.companyRoles!.join(', ')}' : ''}',
+                                        style: AppTextStyles.darkStatCaption
+                                            .copyWith(
+                                          color: AppColors.secondary,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
                                     if (app.role != null) ...[
                                       const SizedBox(height: 4),
                                       Text(
@@ -225,6 +287,27 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
                                       ),
                                     ],
                                     const SizedBox(height: 6),
+                                    if (app.extractedDetails?.salary != null ||
+                                        app.extractedDetails?.location !=
+                                            null) ...[
+                                      Wrap(
+                                        spacing: 6,
+                                        runSpacing: 4,
+                                        children: [
+                                          if (app.extractedDetails?.salary !=
+                                              null)
+                                            _infoChip(
+                                              app.extractedDetails!.salary!,
+                                            ),
+                                          if (app.extractedDetails?.location !=
+                                              null)
+                                            _infoChip(
+                                              app.extractedDetails!.location!,
+                                            ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 6),
+                                    ],
                                     Text(
                                       _platformLabels[app.platformId] ??
                                           app.platformId,
@@ -246,7 +329,10 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
                                   ],
                                 ),
                               ),
-                              _statusBadge(app.status),
+                              ApplicationStatusBadge(
+                                status: app.status,
+                                onTap: () => _openStatusUpdate(app),
+                              ),
                             ],
                           ),
                         );
@@ -270,32 +356,16 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
     return '${months[local.month - 1]} ${local.day}, ${local.year}';
   }
 
-  Widget _statusBadge(String status) {
-    Color color;
-    switch (status) {
-      case 'interview':
-        color = AppColors.warning;
-      case 'offer':
-        color = AppColors.success;
-      case 'rejected':
-      case 'ghosted':
-        color = AppColors.error;
-      default:
-        color = AppColors.secondary;
-    }
-
+  Widget _infoChip(String label) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
+        color: AppColors.secondary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
-        status.toUpperCase(),
-        style: AppTextStyles.darkCardTag.copyWith(
-          color: color,
-          fontSize: 10,
-        ),
+        label,
+        style: AppTextStyles.darkStatCaption.copyWith(fontSize: 10),
       ),
     );
   }
