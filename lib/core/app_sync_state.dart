@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import 'api/sync_cancelled_exception.dart';
 import 'api/user_api.dart';
 import 'models/user_profile.dart';
 
@@ -47,6 +48,12 @@ class AppSyncState extends ChangeNotifier {
   };
 
   bool get hasSyncedData => sync.hasSynced;
+
+  bool get hasStatsData =>
+      sync.emailsProcessed > 0 ||
+      sync.applicationsCount > 0 ||
+      sync.interviewsCount > 0 ||
+      sync.offersCount > 0;
 
   int get emailsProcessed => sync.emailsProcessed;
   int get applicationsFound => sync.applicationsCount;
@@ -124,25 +131,58 @@ class AppSyncState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> runSync() async {
+  Future<void> runSync({DateTime? fromDate, DateTime? toDate}) async {
     if (syncButtonState == SyncButtonState.syncing) return;
     syncButtonState = SyncButtonState.syncing;
     notifyListeners();
 
     try {
-      final result = await UserApi.instance.runSync();
+      final result = await UserApi.instance.runSync(
+        fromDate: fromDate,
+        toDate: toDate,
+      );
       sync = result;
+      if (result.scan != null) {
+        scanRange =
+            '${result.scan!.fromDate} → ${result.scan!.toDate}';
+      }
+      if (kDebugMode) {
+        debugPrint(
+          'Sync complete → emails: ${result.emailsProcessed}, '
+          'apps: ${result.applicationsCount}, '
+          'new: ${result.scan?.newMessages ?? 0}',
+        );
+      }
       syncButtonState = SyncButtonState.success;
       notifyListeners();
 
-      await Future<void>.delayed(const Duration(seconds: 2));
+      await Future<void>.delayed(const Duration(milliseconds: 600));
       syncButtonState = SyncButtonState.idle;
+      notifyListeners();
+    } on SyncCancelledException {
+      syncButtonState = SyncButtonState.idle;
+      notifyListeners();
+      try {
+        sync = await UserApi.instance.finalizeSyncStats();
+        if (sync.scan != null) {
+          scanRange = '${sync.scan!.fromDate} → ${sync.scan!.toDate}';
+        }
+      } catch (_) {
+        try {
+          await refreshProfile();
+        } catch (_) {}
+      }
       notifyListeners();
     } catch (_) {
       syncButtonState = SyncButtonState.idle;
       notifyListeners();
       rethrow;
     }
+  }
+
+  void cancelSync() {
+    if (syncButtonState != SyncButtonState.syncing) return;
+    UserApi.instance.cancelSync();
   }
 
   Future<void> deleteAllData() async {

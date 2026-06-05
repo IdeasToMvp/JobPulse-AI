@@ -1,11 +1,25 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/app_sync_state.dart';
+import '../../../core/models/user_profile.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/glass_card.dart';
 import 'dashboard_sync_button.dart';
 import 'dashboard_syncing_view.dart';
+import 'sync_prepare_sheet.dart';
+
+const _platformLabels = {
+  'linkedin': 'LinkedIn',
+  'naukri': 'Naukri',
+  'indeed': 'Indeed',
+  'instahyre': 'Instahyre',
+  'wellfound': 'Wellfound',
+  'foundit': 'Foundit',
+  'glassdoor': 'Glassdoor',
+  'career_pages': 'Career Pages',
+  'referrals': 'Referrals',
+};
 
 class SyncedDashboardView extends StatelessWidget {
   const SyncedDashboardView({super.key});
@@ -30,6 +44,15 @@ class _DashboardContent extends StatelessWidget {
 
   final AppSyncState state;
 
+  List<MapEntry<String, PlatformSyncStats>> get _platformEntries {
+    return state.sync.byPlatform.entries
+        .where(
+          (e) =>
+              e.value.emailsProcessed > 0 || e.value.applicationsCount > 0,
+        )
+        .toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     final firstName = state.userName.split(' ').first;
@@ -43,10 +66,13 @@ class _DashboardContent extends StatelessWidget {
           children: [
             _buildGreetingHeader(context, firstName),
             const SizedBox(height: 20),
-            _buildStatsGrid(),
-            if (state.sync.emailsProcessed == 0 &&
-                state.sync.applicationsCount == 0) ...[
-              const SizedBox(height: 20),
+            if (state.hasStatsData) ...[
+              _buildStatsGrid(),
+              if (_platformEntries.isNotEmpty) ...[
+                const SizedBox(height: 20),
+                _buildPlatformBreakdown(),
+              ],
+            ] else ...[
               _buildNoResultsCard(),
             ],
           ],
@@ -86,7 +112,10 @@ class _DashboardContent extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 DashboardSyncButton(
-                  onPressed: () => AppSyncState.instance.runSync(),
+                  onPressed: () => SyncPrepareSheet.show(
+                    context,
+                    onSyncStarted: () {},
+                  ),
                 ),
                 Text(
                   'Last sync: ${state.lastSyncLabel}',
@@ -107,18 +136,6 @@ class _DashboardContent extends StatelessWidget {
                   icon: const Icon(
                     Icons.notifications_outlined,
                     color: AppColors.onboardingTitle,
-                  ),
-                ),
-                Positioned(
-                  right: 8,
-                  top: 8,
-                  child: Container(
-                    width: 7,
-                    height: 7,
-                    decoration: const BoxDecoration(
-                      color: AppColors.error,
-                      shape: BoxShape.circle,
-                    ),
                   ),
                 ),
               ],
@@ -149,7 +166,6 @@ class _DashboardContent extends StatelessWidget {
               child: _statCard(
                 icon: Icons.description_outlined,
                 iconColor: const Color(0xFF60A5FA),
-                tag: 'ALL',
                 value: '${sync.applicationsCount}',
                 label: 'Applications',
               ),
@@ -159,7 +175,6 @@ class _DashboardContent extends StatelessWidget {
               child: _statCard(
                 icon: Icons.bolt_rounded,
                 iconColor: AppColors.secondary,
-                tag: 'LIVE',
                 value: '${sync.activeCount}',
                 label: 'Active',
               ),
@@ -173,7 +188,6 @@ class _DashboardContent extends StatelessWidget {
               child: _statCard(
                 icon: Icons.calendar_month_outlined,
                 iconColor: AppColors.warning,
-                tag: 'STAGE 3',
                 value: '${sync.interviewsCount}',
                 label: 'Interviews',
                 accentColor: AppColors.warning,
@@ -184,7 +198,6 @@ class _DashboardContent extends StatelessWidget {
               child: _statCard(
                 icon: Icons.verified_rounded,
                 iconColor: AppColors.success,
-                tag: 'GOAL',
                 value: '${sync.offersCount}',
                 label: 'Offers',
                 accentColor: AppColors.success,
@@ -199,7 +212,6 @@ class _DashboardContent extends StatelessWidget {
   Widget _statCard({
     required IconData icon,
     required Color iconColor,
-    required String tag,
     required String value,
     required String label,
     Color? accentColor,
@@ -217,18 +229,7 @@ class _DashboardContent extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Icon(icon, color: iconColor, size: 18),
-                  const Spacer(),
-                  Text(
-                    tag,
-                    style: AppTextStyles.darkCardTag.copyWith(
-                      color: AppColors.dashboardMuted,
-                    ),
-                  ),
-                ],
-              ),
+              Icon(icon, color: iconColor, size: 18),
               const SizedBox(height: 12),
               Text(value, style: AppTextStyles.darkStatValue),
               const SizedBox(height: 4),
@@ -236,6 +237,42 @@ class _DashboardContent extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildPlatformBreakdown() {
+    final entries = _platformEntries;
+    return GlassCard(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('By job source', style: AppTextStyles.featureTitle),
+          const SizedBox(height: 12),
+          for (var i = 0; i < entries.length; i++) ...[
+            if (i > 0) const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _platformLabels[entries[i].key] ?? entries[i].key,
+                    style: AppTextStyles.featureTitle.copyWith(fontSize: 13),
+                  ),
+                ),
+                Text(
+                  '${entries[i].value.emailsProcessed} emails',
+                  style: AppTextStyles.darkStatCaption,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  '${entries[i].value.applicationsCount} apps',
+                  style: AppTextStyles.darkStatCaption,
+                ),
+              ],
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -251,8 +288,9 @@ class _DashboardContent extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Sync completed. Gmail analysis will populate applications '
-              'as we process your inbox.',
+              'Sync completed. No job-related emails were found for your '
+              'selected sources in this date range. Run sync again with a '
+              'wider range or different sources to find applications.',
               style: AppTextStyles.darkSubtitle.copyWith(height: 1.4),
             ),
           ),

@@ -1,3 +1,18 @@
+export interface PlatformSyncStats {
+  emailsProcessed: number;
+  applicationsCount: number;
+  interviewsCount: number;
+  offersCount: number;
+}
+
+export interface SyncScanMeta {
+  fromDate: string;
+  toDate: string;
+  newMessages: number;
+  skippedProcessed: number;
+  aiCalls: number;
+}
+
 export interface UserRecord {
   id: string;
   googleId: string;
@@ -7,6 +22,9 @@ export interface UserRecord {
   createdAt: Date;
   updatedAt: Date;
   lastSyncedAt?: Date;
+  lastGmailInternalDate?: Date;
+  syncFromDate?: Date;
+  syncToDate?: Date;
   emailsProcessed: number;
   applicationsCount: number;
   activeCount: number;
@@ -23,6 +41,9 @@ export interface DbUserRow {
   created_at: string;
   updated_at: string;
   last_synced_at: string | null;
+  last_gmail_internal_date: string | null;
+  sync_from_date: string | null;
+  sync_to_date: string | null;
   emails_processed: number;
   applications_count: number;
   active_count: number;
@@ -57,5 +78,13 @@ export interface UserProfileResponse {
     interviewsCount: number;
     offersCount: number;
     hasSynced: boolean;
+    scan?: SyncScanMeta;
+    byPlatform?: Record<string, PlatformSyncStats>;
   };
+}
+
+export interface GoogleTokens {
+  accessToken?: string;
+  refreshToken?: string;
+  accessTokenExpiresAt?: Date;
 }

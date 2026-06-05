@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import '../../core/app_sync_state.dart';
 import '../../core/auth/auth_state.dart';
 import '../../core/theme/app_colors.dart';
 import '../account/account_screen.dart';
@@ -26,6 +29,7 @@ class _MainShellState extends State<MainShell> {
   @override
   void initState() {
     super.initState();
+    unawaited(AppSyncState.instance.refreshProfile());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!AuthState.instance.isAuthenticated && mounted) {
         Navigator.of(context).pushAndRemoveUntil(

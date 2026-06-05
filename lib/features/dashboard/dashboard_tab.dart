@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/app_sync_state.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
+import 'widgets/applications_tab_view.dart';
 import 'widgets/connect_gmail_view.dart';
 import 'widgets/dashboard_syncing_view.dart';
 import 'widgets/synced_dashboard_view.dart';
@@ -33,11 +34,7 @@ class ApplicationsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const _EmptyDataPlaceholder(
-      icon: Icons.work_outline_rounded,
-      title: 'Applications',
-      message: 'Sync Gmail to start tracking your job applications.',
-    );
+    return const ApplicationsTabView();
   }
 }
 

@@ -5,6 +5,7 @@ const REQUIRED = [
   'SUPABASE_URL',
   'SUPABASE_SERVICE_ROLE_KEY',
   'TOKEN_ENCRYPTION_KEY',
+  'OPENAI_API_KEY',
 ] as const;
 
 export function validateEnv(): void {

@@ -3,6 +3,7 @@ import {
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
+import { ApplicationsService } from '../applications/applications.service';
 import { GMAIL_SCOPES } from '../auth/google-scopes';
 import { TokenEncryptionService } from '../common/crypto/token-encryption.service';
 import { SupabaseService } from '../supabase/supabase.service';
@@ -10,6 +11,8 @@ import { JobSourcesService } from './job-sources.service';
 import {
   DbOAuthRow,
   DbUserRow,
+  GoogleTokens,
+  PlatformSyncStats,
   UserProfileResponse,
   UserRecord,
 } from './user.entity';
@@ -32,6 +35,7 @@ export class UsersService {
     private readonly supabase: SupabaseService,
     private readonly encryption: TokenEncryptionService,
     private readonly jobSources: JobSourcesService,
+    private readonly applications: ApplicationsService,
   ) {}
 
   async findById(id: string): Promise<UserRecord | null> {
@@ -61,7 +65,40 @@ export class UsersService {
     if (!user) return null;
 
     const jobSources = await this.jobSources.getForUser(userId);
-    return this.toProfile(user, jobSources);
+    const { totals, byPlatform } =
+      await this.applications.computeAggregates(userId);
+
+    if (this.hasStaleSyncCounts(user, totals)) {
+      await this.applications.recomputeAggregates(userId);
+    }
+
+    return this.toProfile(user, jobSources, byPlatform, totals);
+  }
+
+  async getGoogleTokens(userId: string): Promise<GoogleTokens> {
+    const { data, error } = await this.supabase.db
+      .from('oauth_credentials')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (error) this.raiseDbError('getGoogleTokens', error);
+    if (!data) {
+      return {};
+    }
+
+    const row = data as DbOAuthRow;
+    return {
+      accessToken: row.access_token_encrypted
+        ? this.encryption.decrypt(row.access_token_encrypted)
+        : undefined,
+      refreshToken: row.refresh_token_encrypted
+        ? this.encryption.decrypt(row.refresh_token_encrypted)
+        : undefined,
+      accessTokenExpiresAt: row.access_token_expires_at
+        ? new Date(row.access_token_expires_at)
+        : undefined,
+    };
   }
 
   async upsertGoogleUser(input: UpsertGoogleUserInput): Promise<UserRecord> {
@@ -93,10 +130,27 @@ export class UsersService {
   }
 
   async resetSyncData(userId: string): Promise<void> {
+    const tables = [
+      'processed_emails',
+      'applications',
+      'user_sync_platform_stats',
+    ] as const;
+
+    for (const table of tables) {
+      const { error: deleteError } = await this.supabase.db
+        .from(table)
+        .delete()
+        .eq('user_id', userId);
+      if (deleteError) this.raiseDbError(`resetSyncData.${table}`, deleteError);
+    }
+
     const { error } = await this.supabase.db
       .from('users')
       .update({
         last_synced_at: null,
+        last_gmail_internal_date: null,
+        sync_from_date: null,
+        sync_to_date: null,
         emails_processed: 0,
         applications_count: 0,
         active_count: 0,
@@ -120,7 +174,44 @@ export class UsersService {
     };
   }
 
-  toProfile(user: UserRecord, jobSources: string[]): UserProfileResponse {
+  toProfile(
+    user: UserRecord,
+    jobSources: string[],
+    byPlatform: Record<string, PlatformSyncStats> = {},
+    liveTotals?: Pick<
+      UserRecord,
+      | 'emailsProcessed'
+      | 'applicationsCount'
+      | 'activeCount'
+      | 'interviewsCount'
+      | 'offersCount'
+    >,
+  ): UserProfileResponse {
+    const sync: UserProfileResponse['sync'] = {
+      lastSyncedAt: user.lastSyncedAt?.toISOString() ?? null,
+      emailsProcessed: liveTotals?.emailsProcessed ?? user.emailsProcessed,
+      applicationsCount:
+        liveTotals?.applicationsCount ?? user.applicationsCount,
+      activeCount: liveTotals?.activeCount ?? user.activeCount,
+      interviewsCount: liveTotals?.interviewsCount ?? user.interviewsCount,
+      offersCount: liveTotals?.offersCount ?? user.offersCount,
+      hasSynced: user.lastSyncedAt != null,
+    };
+
+    if (Object.keys(byPlatform).length > 0) {
+      sync.byPlatform = byPlatform;
+    }
+
+    if (user.syncFromDate && user.syncToDate) {
+      sync.scan = {
+        fromDate: user.syncFromDate.toISOString().slice(0, 10),
+        toDate: user.syncToDate.toISOString().slice(0, 10),
+        newMessages: 0,
+        skippedProcessed: 0,
+        aiCalls: 0,
+      };
+    }
+
     return {
       id: user.id,
       email: user.email,
@@ -128,16 +219,28 @@ export class UsersService {
       picture: user.picture,
       memberSince: this.formatMemberSince(user.createdAt),
       jobSources,
-      sync: {
-        lastSyncedAt: user.lastSyncedAt?.toISOString() ?? null,
-        emailsProcessed: user.emailsProcessed,
-        applicationsCount: user.applicationsCount,
-        activeCount: user.activeCount,
-        interviewsCount: user.interviewsCount,
-        offersCount: user.offersCount,
-        hasSynced: user.lastSyncedAt != null,
-      },
+      sync,
     };
+  }
+
+  private hasStaleSyncCounts(
+    user: UserRecord,
+    totals: Pick<
+      UserRecord,
+      | 'emailsProcessed'
+      | 'applicationsCount'
+      | 'activeCount'
+      | 'interviewsCount'
+      | 'offersCount'
+    >,
+  ): boolean {
+    return (
+      user.emailsProcessed !== totals.emailsProcessed ||
+      user.applicationsCount !== totals.applicationsCount ||
+      user.activeCount !== totals.activeCount ||
+      user.interviewsCount !== totals.interviewsCount ||
+      user.offersCount !== totals.offersCount
+    );
   }
 
   private async insertUser(input: UpsertGoogleUserInput): Promise<UserRecord> {
@@ -234,6 +337,13 @@ export class UsersService {
       lastSyncedAt: row.last_synced_at
         ? new Date(row.last_synced_at)
         : undefined,
+      lastGmailInternalDate: row.last_gmail_internal_date
+        ? new Date(row.last_gmail_internal_date)
+        : undefined,
+      syncFromDate: row.sync_from_date
+        ? new Date(row.sync_from_date)
+        : undefined,
+      syncToDate: row.sync_to_date ? new Date(row.sync_to_date) : undefined,
       emailsProcessed: row.emails_processed ?? 0,
       applicationsCount: row.applications_count ?? 0,
       activeCount: row.active_count ?? 0,

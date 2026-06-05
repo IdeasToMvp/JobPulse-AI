@@ -16,6 +16,7 @@ describe('AppController (e2e)', () => {
     process.env.JWT_SECRET = 'test-jwt-secret';
     process.env.GOOGLE_CLIENT_ID = 'test-client-id';
     process.env.GOOGLE_CLIENT_SECRET = 'test-client-secret';
+    process.env.OPENAI_API_KEY = 'test-openai-key';
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],

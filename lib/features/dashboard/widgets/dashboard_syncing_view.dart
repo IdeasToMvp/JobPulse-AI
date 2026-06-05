@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/app_sync_state.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/glass_card.dart';
@@ -21,48 +22,100 @@ class _DashboardSyncingViewState extends State<DashboardSyncingView> {
     _SyncStep('Updating dashboard', 'Refreshing your snapshot'),
   ];
 
-  int _completedSteps = 0;
-  double _progress = 0.12;
-  String _taskLabel = 'Starting Gmail sync...';
-  Timer? _timer;
+  Timer? _tickTimer;
+  DateTime? _startedAt;
+  int _visualCompletedSteps = 0;
+  double _visualProgress = 0.12;
 
   @override
   void initState() {
     super.initState();
-    _startSequence();
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  void _startSequence() {
-    _timer = Timer.periodic(const Duration(milliseconds: 850), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-
-      if (_completedSteps < _steps.length) {
-        setState(() {
-          _completedSteps++;
-          _progress = 0.2 + (_completedSteps / _steps.length) * 0.76;
-          _taskLabel = _completedSteps < _steps.length
-              ? 'Syncing Gmail...'
-              : 'Finalizing dashboard...';
-        });
-      } else {
-        setState(() => _progress = 1);
-        timer.cancel();
-      }
+    _startedAt = DateTime.now();
+    AppSyncState.instance.addListener(_onSyncStateChanged);
+    _tickTimer = Timer.periodic(const Duration(milliseconds: 400), (_) {
+      if (!mounted) return;
+      _updateVisualProgress();
     });
   }
 
   @override
+  void dispose() {
+    _tickTimer?.cancel();
+    AppSyncState.instance.removeListener(_onSyncStateChanged);
+    super.dispose();
+  }
+
+  void _onSyncStateChanged() {
+    if (!mounted) return;
+    setState(_updateVisualProgress);
+  }
+
+  bool get _isSyncing =>
+      AppSyncState.instance.syncButtonState == SyncButtonState.syncing;
+
+  bool get _isDone =>
+      AppSyncState.instance.syncButtonState == SyncButtonState.success;
+
+  Future<void> _stopSync() async {
+    AppSyncState.instance.cancelSync();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Sync stopped. Saving progress and updating your dashboard…',
+        ),
+      ),
+    );
+  }
+
+  void _updateVisualProgress() {
+    if (_isDone) {
+      _visualProgress = 1;
+      _visualCompletedSteps = _steps.length;
+      return;
+    }
+
+    if (!_isSyncing) return;
+
+    final elapsed = DateTime.now().difference(_startedAt ?? DateTime.now());
+    final seconds = elapsed.inMilliseconds / 1000;
+
+    // Cap at 88% until the backend POST /sync actually returns.
+    _visualProgress = (0.12 + (seconds / 120) * 0.76).clamp(0.12, 0.88);
+
+    if (seconds < 2) {
+      _visualCompletedSteps = 0;
+    } else if (seconds < 8) {
+      _visualCompletedSteps = 1;
+    } else if (seconds < 20) {
+      _visualCompletedSteps = 2;
+    } else {
+      _visualCompletedSteps = 3;
+    }
+  }
+
+  String get _taskLabel {
+    if (_isDone) return 'Sync complete';
+    if (!_isSyncing) return 'Preparing sync...';
+
+    switch (_visualCompletedSteps) {
+      case 0:
+        return 'Connecting to Gmail...';
+      case 1:
+        return 'Scanning inbox...';
+      case 2:
+        return 'Processing job emails...';
+      default:
+        return 'Still scanning — this may take a minute';
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final progressPercent = (_progress * 100).round().clamp(0, 100);
+    _updateVisualProgress();
+    final progressPercent = (_visualProgress * 100).round().clamp(0, 100);
+    final showLongRunningHint =
+        _isSyncing && _visualCompletedSteps >= 3 && _visualProgress >= 0.85;
 
     return ColoredBox(
       color: AppColors.dashboardBackground,
@@ -100,27 +153,53 @@ class _DashboardSyncingViewState extends State<DashboardSyncingView> {
                           ),
                         ),
                       ),
-                      Text(
-                        '$progressPercent%',
-                        style: AppTextStyles.darkStatValue.copyWith(
-                          fontSize: 26,
-                          color: AppColors.secondary,
+                      if (_isSyncing && !_isDone)
+                        const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.secondary,
+                          ),
+                        )
+                      else
+                        Text(
+                          '$progressPercent%',
+                          style: AppTextStyles.darkStatValue.copyWith(
+                            fontSize: 26,
+                            color: AppColors.secondary,
+                          ),
                         ),
-                      ),
                     ],
                   ),
                   const SizedBox(height: 14),
                   ClipRRect(
                     borderRadius: BorderRadius.circular(6),
-                    child: LinearProgressIndicator(
-                      value: _progress,
-                      minHeight: 8,
-                      backgroundColor: AppColors.platformsProgressTrack,
-                      valueColor: const AlwaysStoppedAnimation<Color>(
-                        AppColors.secondary,
-                      ),
-                    ),
+                    child: _isSyncing && !_isDone
+                        ? const LinearProgressIndicator(
+                            minHeight: 8,
+                            backgroundColor: AppColors.platformsProgressTrack,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              AppColors.secondary,
+                            ),
+                          )
+                        : LinearProgressIndicator(
+                            value: _visualProgress,
+                            minHeight: 8,
+                            backgroundColor: AppColors.platformsProgressTrack,
+                            valueColor: const AlwaysStoppedAnimation<Color>(
+                              AppColors.secondary,
+                            ),
+                          ),
                   ),
+                  if (showLongRunningHint) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      'Your emails are being filtered and classified on the server. '
+                      'Stats appear when the scan finishes or when you stop sync.',
+                      style: AppTextStyles.darkStatCaption.copyWith(height: 1.4),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -135,8 +214,8 @@ class _DashboardSyncingViewState extends State<DashboardSyncingView> {
             const SizedBox(height: 12),
             ...List.generate(_steps.length, (index) {
               final step = _steps[index];
-              final done = index < _completedSteps;
-              final active = index == _completedSteps && !done;
+              final done = index < _visualCompletedSteps;
+              final active = index == _visualCompletedSteps && _isSyncing && !done;
               return Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: _insightRow(
@@ -147,6 +226,29 @@ class _DashboardSyncingViewState extends State<DashboardSyncingView> {
                 ),
               );
             }),
+            if (_isSyncing && !_isDone) ...[
+              const SizedBox(height: 20),
+              OutlinedButton.icon(
+                onPressed: _stopSync,
+                icon: const Icon(Icons.stop_circle_outlined, size: 18),
+                label: const Text('Stop sync'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.error,
+                  side: const BorderSide(color: AppColors.error),
+                  minimumSize: const Size.fromHeight(48),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Stopping saves emails processed so far and refreshes your '
+                'dashboard with partial results.',
+                textAlign: TextAlign.center,
+                style: AppTextStyles.darkStatCaption.copyWith(height: 1.35),
+              ),
+            ],
           ],
         ),
       ),

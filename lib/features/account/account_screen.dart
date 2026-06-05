@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../core/app_sync_state.dart';
-import '../../core/auth/auth_service.dart';
 import '../../core/auth/auth_state.dart';
 import '../login/login_screen.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/widgets/glass_card.dart';
+import '../dashboard/widgets/sync_prepare_sheet.dart';
 import '../platforms/models/job_platform.dart';
 
 class AccountScreen extends StatelessWidget {
@@ -159,15 +159,6 @@ class AccountScreen extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          _outlineAction(context, 'Reconnect Gmail', () => _reconnectGmail(context)),
-          const SizedBox(height: 8),
-          _outlineAction(
-            context,
-            'Disconnect Gmail',
-            () => _confirmDisconnect(context, state),
-            destructive: true,
-          ),
         ],
       ),
     );
@@ -265,19 +256,8 @@ class AccountScreen extends StatelessWidget {
         children: [
           _infoRow('Current Scan Range', state.scanRange),
           const SizedBox(height: 12),
-          _outlineAction(context, 'Rescan Gmail', () async {
-            try {
-              await state.runSync();
-              if (!context.mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Gmail rescan completed')),
-              );
-            } catch (_) {
-              if (!context.mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Rescan failed')),
-              );
-            }
+          _outlineAction(context, 'Rescan Gmail', () {
+            SyncPrepareSheet.show(context, onSyncStarted: () {});
           }),
           const SizedBox(height: 8),
           Text(
@@ -505,21 +485,6 @@ class AccountScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _reconnectGmail(BuildContext context) async {
-    try {
-      await AuthState.instance.signInWithGoogle();
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Gmail reconnected successfully')),
-      );
-    } on AuthException catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
-    }
-  }
-
   Future<void> _confirmSignOut(BuildContext context) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -549,55 +514,56 @@ class AccountScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _confirmDisconnect(BuildContext context, AppSyncState state) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.white,
-        title: const Text('Disconnect Gmail?'),
-        content: const Text('Job tracking will pause until you reconnect.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Disconnect', style: TextStyle(color: AppColors.error)),
-          ),
-        ],
-      ),
-    );
-    if (ok != true || !context.mounted) return;
-
-    await AuthState.instance.signOut();
-    if (!context.mounted) return;
-
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
-      (_) => false,
-    );
-  }
-
   Future<void> _confirmDeleteData(BuildContext context, AppSyncState state) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.white,
-        title: const Text('Delete all data?'),
-        content: const Text('This removes processed emails and applications from JobPulse AI.'),
+        title: const Text('Delete all synced data?'),
+        content: const Text(
+          'This permanently removes everything JobPulse AI has synced from '
+          'your Gmail:\n\n'
+          '• Processed emails\n'
+          '• Job applications and their statuses\n'
+          '• Dashboard stats and platform breakdowns\n\n'
+          'Your Google sign-in and job source preferences are kept. '
+          'This action cannot be undone.',
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete', style: TextStyle(color: AppColors.error)),
+            child: const Text('Delete all data', style: TextStyle(color: AppColors.error)),
           ),
         ],
       ),
     );
     if (ok != true || !context.mounted) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.white,
+        title: const Text('Are you sure?'),
+        content: const Text(
+          'All synced job tracking data will be erased from your account.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep data')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Yes, delete everything', style: TextStyle(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
     try {
       await state.deleteAllData();
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('All sync data cleared')),
+        const SnackBar(content: Text('All synced data has been cleared')),
       );
     } catch (_) {
       if (!context.mounted) return;
