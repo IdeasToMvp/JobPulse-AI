@@ -245,6 +245,20 @@ export class ApplicationsService {
     );
   }
 
+  async countApplicationsCreatedSince(
+    userId: string,
+    since: Date,
+  ): Promise<number> {
+    const { count, error } = await this.supabase.db
+      .from('applications')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .gte('created_at', since.toISOString());
+
+    if (error) this.raise('countApplicationsCreatedSince', error);
+    return count ?? 0;
+  }
+
   async clearUserData(userId: string): Promise<void> {
     const tables = [
       'company_recruiter_emails',

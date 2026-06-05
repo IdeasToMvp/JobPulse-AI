@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../auth/auth_service.dart';
 import '../auth/token_storage.dart';
 import '../config/app_config.dart';
+import '../models/activity.dart';
 import '../models/application.dart';
 import '../models/sync_phase_result.dart';
 import '../models/user_profile.dart';
@@ -314,6 +315,29 @@ class UserApi {
     return body
         .map((e) => JobApplication.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  Future<ActivityPage> fetchActivities({
+    ActivityFilter filter = ActivityFilter.all,
+    int offset = 0,
+    int limit = 20,
+  }) async {
+    final token = await _token();
+    final uri = Uri.parse('${AppConfig.apiBaseUrl}/activities').replace(
+      queryParameters: {
+        'type': filter.apiValue,
+        'offset': '$offset',
+        'limit': '$limit',
+      },
+    );
+    final response = await http.get(uri, headers: _headers(token));
+
+    if (response.statusCode != 200) {
+      throw AuthException('Failed to load activity');
+    }
+
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return ActivityPage.fromJson(body);
   }
 
   Future<UserSyncState> finalizeSyncStats() async {

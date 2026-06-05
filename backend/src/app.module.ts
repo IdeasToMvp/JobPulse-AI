@@ -6,6 +6,7 @@ import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import configuration from './config/configuration';
 import { SupabaseModule } from './supabase/supabase.module';
+import { ActivitiesModule } from './activities/activities.module';
 import { ApplicationsModule } from './applications/applications.module';
 import { SyncModule } from './sync/sync.module';
 import { UsersModule } from './users/users.module';
@@ -19,6 +20,7 @@ import { UsersModule } from './users/users.module';
     ScheduleModule.forRoot(),
     SupabaseModule,
     UsersModule,
+    ActivitiesModule,
     ApplicationsModule,
     SyncModule,
     AuthModule,

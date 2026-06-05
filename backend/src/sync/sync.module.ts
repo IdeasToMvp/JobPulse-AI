@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ActivitiesModule } from '../activities/activities.module';
 import { AuthModule } from '../auth/auth.module';
 import { ApplicationsModule } from '../applications/applications.module';
 import { GmailModule } from '../gmail/gmail.module';
@@ -14,7 +15,7 @@ import { SyncController } from './sync.controller';
 import { SyncService } from './sync.service';
 
 @Module({
-  imports: [UsersModule, AuthModule, GmailModule, ApplicationsModule],
+  imports: [UsersModule, AuthModule, GmailModule, ApplicationsModule, ActivitiesModule],
   controllers: [SyncController],
   providers: [
     SyncService,

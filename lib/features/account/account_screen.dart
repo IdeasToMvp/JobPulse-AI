@@ -6,7 +6,6 @@ import '../login/login_screen.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../../core/widgets/glass_card.dart';
-import '../dashboard/widgets/sync_prepare_sheet.dart';
 import '../platforms/models/job_platform.dart';
 
 class AccountScreen extends StatelessWidget {
@@ -47,13 +46,7 @@ class AccountScreen extends StatelessWidget {
                 const SizedBox(height: 16),
                 _jobSourcesSection(context, state),
                 const SizedBox(height: 16),
-                _scanSettingsSection(context, state),
-                const SizedBox(height: 16),
-                _notificationsSection(state),
-                const SizedBox(height: 16),
                 _privacySection(context, state),
-                const SizedBox(height: 16),
-                _supportSection(context),
                 const SizedBox(height: 16),
                 _signOutSection(context),
               ],
@@ -248,70 +241,14 @@ class AccountScreen extends StatelessWidget {
     );
   }
 
-  Widget _scanSettingsSection(BuildContext context, AppSyncState state) {
-    return _section(
-      title: 'Scan Settings',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _infoRow('Current Scan Range', state.scanRange),
-          const SizedBox(height: 12),
-          _outlineAction(context, 'Rescan Gmail', () {
-            SyncPrepareSheet.show(context, onSyncStarted: () {});
-          }),
-          const SizedBox(height: 8),
-          Text(
-            'Scan older emails and rebuild application history.',
-            style: AppTextStyles.darkStatCaption,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _notificationsSection(AppSyncState state) {
-    const items = [
-      ('interview_alerts', 'Interview Alerts'),
-      ('offer_alerts', 'Offer Alerts'),
-      ('recruiter_outreach', 'Recruiter Outreach'),
-      ('new_opportunities', 'New Opportunities'),
-      ('application_updates', 'Application Updates'),
-      ('rejected_notifications', 'Rejected Notifications'),
-    ];
-
-    return _section(
-      title: 'Notifications',
-      child: Column(
-        children: [
-          for (var i = 0; i < items.length; i++) ...[
-            if (i > 0) const Divider(color: AppColors.platformsCardBorder),
-            _toggleRow(
-              title: items[i].$2,
-              value: state.notificationSettings[items[i].$1] ?? false,
-              onChanged: (v) => state.setNotification(items[i].$1, v),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
   Widget _privacySection(BuildContext context, AppSyncState state) {
     return _section(
       title: 'Privacy',
-      child: Column(
-        children: [
-          _infoRow('Emails Processed', '${state.emailsProcessed}'),
-          const SizedBox(height: 8),
-          _infoRow('Applications Found', '${state.applicationsFound}'),
-          const SizedBox(height: 14),
-          _outlineAction(
-            context,
-            'Delete All Data',
-            () => _confirmDeleteData(context, state),
-            destructive: true,
-          ),
-        ],
+      child: _outlineAction(
+        context,
+        'Delete All Data',
+        () => _confirmDeleteData(context, state),
+        destructive: true,
       ),
     );
   }
@@ -324,41 +261,6 @@ class AccountScreen extends StatelessWidget {
         'Sign Out',
         () => _confirmSignOut(context),
         destructive: true,
-      ),
-    );
-  }
-
-  Widget _supportSection(BuildContext context) {
-    const items = [
-      'Help Center',
-      'Contact Support',
-      'Send Feedback',
-      'Rate App',
-    ];
-
-    return _section(
-      title: 'Support',
-      child: Column(
-        children: [
-          for (var i = 0; i < items.length; i++) ...[
-            if (i > 0) const Divider(color: AppColors.platformsCardBorder),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(
-                items[i],
-                style: AppTextStyles.featureTitle.copyWith(
-                  color: AppColors.onboardingTitle,
-                  fontSize: 14,
-                ),
-              ),
-              trailing: const Icon(
-                Icons.chevron_right_rounded,
-                color: AppColors.dashboardMuted,
-              ),
-              onTap: () {},
-            ),
-          ],
-        ],
       ),
     );
   }

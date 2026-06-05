@@ -5,6 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { ActivitiesService } from '../activities/activities.service';
 import {
   ApplicationStatus,
   SyncResultResponse,
@@ -57,6 +58,7 @@ export class SyncService {
     private readonly companyDiscovery: CompanyDiscoveryService,
     private readonly applicationMatcher: ApplicationMatcherService,
     private readonly cancellation: SyncCancellationService,
+    private readonly activities: ActivitiesService,
   ) {}
 
   async runSync(userId: string, dto?: RunSyncDto): Promise<SyncResultResponse> {
@@ -221,6 +223,26 @@ export class SyncService {
               company = aiResult.company;
               role = aiResult.role;
               source = 'ai';
+            } else if (
+              aiResult.confidence >= 0.5 &&
+              ['interview', 'offer', 'active'].includes(aiResult.status)
+            ) {
+              status = 'unknown';
+              source = 'ai';
+              const label =
+                aiResult.status === 'interview'
+                  ? 'Possible Interview Invitation detected'
+                  : aiResult.status === 'offer'
+                    ? 'Possible Job Offer detected'
+                    : 'Possible application update detected';
+              await this.activities.recordSuggestion({
+                userId,
+                company: aiResult.company ?? company ?? 'Unknown Company',
+                role: aiResult.role ?? role,
+                suggestion: label,
+                platformId,
+                occurredAt: meta.internalDate,
+              });
             } else {
               status = 'unknown';
               source = 'ai';
@@ -377,6 +399,26 @@ export class SyncService {
                 status = aiResult.status;
                 role = aiResult.role ?? role;
                 source = 'ai';
+              } else if (
+                aiResult.confidence >= 0.5 &&
+                ['interview', 'offer', 'active'].includes(aiResult.status)
+              ) {
+                status = 'unknown';
+                source = 'ai';
+                const label =
+                  aiResult.status === 'interview'
+                    ? 'Possible Interview Invitation detected'
+                    : aiResult.status === 'offer'
+                      ? 'Possible Job Offer detected'
+                      : 'Possible application update detected';
+                await this.activities.recordSuggestion({
+                  userId,
+                  company: company.canonicalName,
+                  role: aiResult.role ?? role,
+                  suggestion: label,
+                  platformId: 'company_direct',
+                  occurredAt: meta.internalDate,
+                });
               } else {
                 status = 'unknown';
                 source = 'ai';
@@ -452,6 +494,10 @@ export class SyncService {
     await this.applications.markApplicationsGhosted(ghostedIds);
 
     const now = new Date();
+    const syncSince = user.lastSyncedAt ?? new Date(0);
+    const newApplications =
+      await this.applications.countApplicationsCreatedSince(userId, syncSince);
+
     const fromDate = dto?.fromDate
       ? new Date(dto.fromDate)
       : user.syncFromDate ?? now;
@@ -476,6 +522,15 @@ export class SyncService {
     const companyEmailsProcessed = dto?.companyEmailsProcessed ?? 0;
     const companiesDiscovered = dto?.companiesDiscovered ?? 0;
     const companiesScanned = dto?.companiesScanned ?? 0;
+
+    if (dto?.newMessages !== undefined) {
+      await this.activities.recordSyncComplete({
+        userId,
+        newMessages,
+        newApplications,
+        occurredAt: now,
+      });
+    }
 
     return {
       ...totals,

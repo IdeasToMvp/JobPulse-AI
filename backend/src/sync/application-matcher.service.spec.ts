@@ -1,21 +1,28 @@
 import { ApplicationMatcherService } from './application-matcher.service';
 import { ApplicationsService } from '../applications/applications.service';
 import { ApplicationLifecycleService } from './application-lifecycle.service';
+import { ActivitiesService } from '../activities/activities.service';
 
 describe('ApplicationMatcherService', () => {
   const applications = {
     getLatestApplicationForThread: jest.fn(),
     getLatestApplicationForCompany: jest.fn(),
+    getLatestApplicationForCompanyNameAndRole: jest.fn(),
     createApplication: jest.fn(),
     updateApplication: jest.fn(),
   } as unknown as ApplicationsService;
+
+  const activities = {
+    recordApplicationDetected: jest.fn().mockResolvedValue(undefined),
+    recordStatusUpdate: jest.fn().mockResolvedValue(undefined),
+  } as unknown as ActivitiesService;
 
   const lifecycle = new ApplicationLifecycleService();
   let matcher: ApplicationMatcherService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    matcher = new ApplicationMatcherService(applications, lifecycle);
+    matcher = new ApplicationMatcherService(applications, lifecycle, activities);
   });
 
   const baseInput = {
@@ -44,7 +51,12 @@ describe('ApplicationMatcherService', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
       });
-    applications.updateApplication = jest.fn().mockResolvedValue({ id: 'app-1' });
+    applications.updateApplication = jest.fn().mockResolvedValue({
+      id: 'app-1',
+      company: 'Microsoft',
+      role: 'Software Engineer',
+      status: 'interview',
+    });
 
     const id = await matcher.matchAndUpsert(baseInput);
 
@@ -65,7 +77,11 @@ describe('ApplicationMatcherService', () => {
       .mockResolvedValue(null);
     applications.createApplication = jest
       .fn()
-      .mockResolvedValue({ id: 'app-new' });
+      .mockResolvedValue({
+        id: 'app-new',
+        company: 'Microsoft',
+        role: 'Software Engineer',
+      });
 
     const id = await matcher.matchAndUpsert(baseInput);
 
@@ -101,7 +117,12 @@ describe('ApplicationMatcherService', () => {
       });
     applications.updateApplication = jest
       .fn()
-      .mockResolvedValue({ id: 'app-linkedin' });
+      .mockResolvedValue({
+        id: 'app-linkedin',
+        company: 'Fast-Growing Startup',
+        role: 'Full Stack Role',
+        status: 'active',
+      });
 
     const id = await matcher.matchAndUpsert({
       ...baseInput,

@@ -22,7 +22,7 @@ class _MainShellState extends State<MainShell> {
   static const _tabs = [
     _NavItem(icon: Icons.home_rounded, label: 'Dashboard'),
     _NavItem(icon: Icons.work_outline_rounded, label: 'Applications'),
-    _NavItem(icon: Icons.notifications_outlined, label: 'Activity'),
+    _NavItem(icon: Icons.timeline_outlined, label: 'Activity'),
     _NavItem(icon: Icons.person_outline_rounded, label: 'Account'),
   ];
 

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ActivitiesService } from '../activities/activities.service';
 import {
   ApplicationRecord,
   ApplicationStatus,
@@ -24,6 +25,7 @@ export class ApplicationMatcherService {
   constructor(
     private readonly applications: ApplicationsService,
     private readonly lifecycle: ApplicationLifecycleService,
+    private readonly activities: ActivitiesService,
   ) {}
 
   async matchAndUpsert(input: MatchEmailInput): Promise<string> {
@@ -70,6 +72,16 @@ export class ApplicationMatcherService {
       lastMessageId: input.messageId,
       lastMessageAt: input.messageAt,
     });
+
+    await this.activities.recordApplicationDetected({
+      userId: input.userId,
+      applicationId: created.id,
+      company: created.company,
+      role: created.role,
+      platformId: input.platformId,
+      occurredAt: input.messageAt,
+    });
+
     return created.id;
   }
 
@@ -97,6 +109,16 @@ export class ApplicationMatcherService {
         lastMessageId: input.messageId,
         lastMessageAt: input.messageAt,
       });
+
+      await this.activities.recordApplicationDetected({
+        userId: input.userId,
+        applicationId: created.id,
+        company: created.company,
+        role: created.role,
+        platformId: existing.platformId,
+        occurredAt: input.messageAt,
+      });
+
       return created.id;
     }
 
@@ -112,6 +134,18 @@ export class ApplicationMatcherService {
       lastMessageAt: input.messageAt,
       companyId: input.companyId,
     });
+
+    await this.activities.recordStatusUpdate({
+      userId: input.userId,
+      applicationId: updated.id,
+      company: updated.company,
+      role: updated.role,
+      previousStatus: existing.status,
+      newStatus: updated.status,
+      platformId: existing.platformId,
+      occurredAt: input.messageAt,
+    });
+
     return updated.id;
   }
 }
