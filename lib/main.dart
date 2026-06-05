@@ -1,9 +1,17 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'core/config/app_config.dart';
 import 'core/theme/app_colors.dart';
 import 'features/splash/splash_screen.dart';
 
 void main() {
+  if (kDebugMode) {
+    debugPrint(
+      'JobPulse API → ${AppConfig.apiBaseUrl}'
+      '${AppConfig.isUsingLocalBackend ? ' (local backend)' : ''}',
+    );
+  }
   runApp(const JobSyncApp());
 }
 
