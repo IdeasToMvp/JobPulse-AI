@@ -7,7 +7,6 @@ import '../../../core/models/application_status.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/salary_format.dart';
-import '../../../core/widgets/responsive_app_frame.dart';
 import 'active_details_sheet.dart';
 import 'application_status_badge.dart';
 import 'update_status_sheet.dart';
@@ -40,7 +39,7 @@ class ApplicationDetailSheet extends StatefulWidget {
     JobApplication application, {
     bool showStatusHistory = false,
   }) {
-    return showAppBottomSheet<void>(
+    return showModalBottomSheet<void>(
       context: context,
       backgroundColor: AppColors.white,
       isScrollControlled: true,

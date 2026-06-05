@@ -24,7 +24,7 @@ export class AuthController {
     private readonly config: ConfigService,
   ) {}
 
-  /** Returns Google OAuth URL for mobile/web clients to open in a browser. */
+  /** Returns Google OAuth URL for mobile clients to open in a browser. */
   @Get('google/url')
   getGoogleAuthUrl(
     @Query('redirectUri') redirectUri?: string,

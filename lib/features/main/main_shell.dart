@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/app_sync_state.dart';
@@ -8,7 +7,6 @@ import '../../core/auth/auth_state.dart';
 import '../../core/notifications/app_notification_service.dart';
 import '../../core/notifications/auto_sync_monitor.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/widgets/responsive_app_frame.dart';
 import '../account/account_screen.dart';
 import '../login/login_screen.dart';
 import '../dashboard/dashboard_tab.dart';
@@ -72,17 +70,14 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     return Scaffold(
       backgroundColor: AppColors.dashboardBackground,
       body: SafeArea(
-        child: Padding(
-          padding: EdgeInsets.only(top: kIsWeb ? kWebContentTopPadding : 0),
-          child: IndexedStack(
-            index: _currentIndex,
-            children: const [
-              DashboardTab(),
-              ApplicationsTab(),
-              ActivityTab(),
-              AccountScreen(),
-            ],
-          ),
+        child: IndexedStack(
+          index: _currentIndex,
+          children: const [
+            DashboardTab(),
+            ApplicationsTab(),
+            ActivityTab(),
+            AccountScreen(),
+          ],
         ),
       ),
       bottomNavigationBar: NavigationBar(

@@ -27,7 +27,7 @@ class AppConfig {
   /// Resolves the machine running the Nest server for local testing.
   static String get localApiHost {
     if (_apiHostOverride.isNotEmpty) return _apiHostOverride;
-    if (!kIsWeb && Platform.isAndroid) return '10.0.2.2';
+    if (Platform.isAndroid) return '10.0.2.2';
     return '127.0.0.1';
   }
 
@@ -44,23 +44,8 @@ class AppConfig {
   static const oauthCallbackHost = 'auth';
   static const oauthCallbackPath = '/callback';
 
-  /// Where the backend redirects after Google OAuth (web origin or mobile deep link).
-  static String get oauthClientRedirectUri {
-    if (kIsWeb) {
-      final base = Uri.base;
-      return Uri(
-        scheme: base.scheme,
-        host: base.host,
-        port: base.hasPort ? base.port : null,
-        path: base.path.isEmpty ? '/' : base.path,
-      ).toString();
-    }
-    return '$oauthCallbackScheme://$oauthCallbackHost$oauthCallbackPath';
-  }
+  static String get oauthClientRedirectUri =>
+      '$oauthCallbackScheme://$oauthCallbackHost$oauthCallbackPath';
 
-  /// Scheme passed to FlutterWebAuth2 (`http`/`https` on web).
-  static String get oauthCallbackSchemeForAuth {
-    if (kIsWeb) return Uri.base.scheme;
-    return oauthCallbackScheme;
-  }
+  static String get oauthCallbackSchemeForAuth => oauthCallbackScheme;
 }

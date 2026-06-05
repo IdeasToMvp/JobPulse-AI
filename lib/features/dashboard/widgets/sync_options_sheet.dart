@@ -4,14 +4,13 @@ import '../../../core/api/sync_cancelled_exception.dart';
 import '../../../core/app_sync_state.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../../core/widgets/responsive_app_frame.dart';
 import 'sync_prepare_sheet.dart';
 
 class SyncOptionsSheet extends StatelessWidget {
   const SyncOptionsSheet({super.key});
 
   static Future<void> show(BuildContext context) {
-    return showAppBottomSheet<void>(
+    return showModalBottomSheet<void>(
       context: context,
       backgroundColor: AppColors.white,
       shape: const RoundedRectangleBorder(

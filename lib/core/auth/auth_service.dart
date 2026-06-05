@@ -6,7 +6,6 @@ import 'package:http/http.dart' as http;
 
 import '../config/app_config.dart';
 import '../models/user_profile.dart';
-import 'oauth_url_cleaner.dart';
 import 'token_storage.dart';
 
 class AuthException implements Exception {
@@ -21,26 +20,6 @@ class AuthService {
   AuthService._();
 
   static final AuthService instance = AuthService._();
-
-  /// On web, Google OAuth redirects back with `?token=` and reloads the app.
-  /// Returns true when a token was captured from the URL.
-  Future<bool> consumeWebOAuthCallbackIfPresent() async {
-    if (!kIsWeb) return false;
-
-    final uri = Uri.base;
-    final error = uri.queryParameters['error'];
-    if (error != null && error.isNotEmpty) {
-      clearOAuthQueryFromBrowserUrl();
-      throw AuthException(Uri.decodeComponent(error));
-    }
-
-    final token = uri.queryParameters['token'];
-    if (token == null || token.isEmpty) return false;
-
-    await TokenStorage.save(token);
-    clearOAuthQueryFromBrowserUrl();
-    return true;
-  }
 
   Future<UserProfile> signInWithGoogle() async {
     final clientRedirect = Uri.encodeComponent(AppConfig.oauthClientRedirectUri);

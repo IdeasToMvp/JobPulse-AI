@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../core/auth/auth_service.dart';
 import '../../core/auth/auth_state.dart';
 import '../../core/app_sync_state.dart';
 import '../../core/theme/app_colors.dart';
@@ -35,13 +34,6 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _bootstrap() async {
-    // Pick up OAuth token immediately on web reload (before splash delay).
-    try {
-      await AuthService.instance.consumeWebOAuthCallbackIfPresent();
-    } on AuthException {
-      // Error query param handled; fall through to restoreSession/onboarding.
-    }
-
     await Future<void>.delayed(const Duration(seconds: 2));
     if (!mounted) return;
 
