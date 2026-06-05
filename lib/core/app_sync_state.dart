@@ -17,16 +17,23 @@ enum SyncStep {
 }
 
 enum SyncFrequency {
-  every15Minutes('Every 15 Minutes', 15),
   every30Minutes('Every 30 Minutes', 30),
   everyHour('Every Hour', 60),
   every6Hours('Every 6 Hours', 360),
   every12Hours('Every 12 Hours', 720),
+  every24Hours('Every 24 Hours', 1440),
   manual('Manual Only', 0);
 
   const SyncFrequency(this.label, this.minutes);
   final String label;
   final int minutes;
+
+  static SyncFrequency fromMinutes(int minutes) {
+    return SyncFrequency.values.firstWhere(
+      (f) => f.minutes == minutes,
+      orElse: () => SyncFrequency.every30Minutes,
+    );
+  }
 }
 
 class AppSyncState extends ChangeNotifier {
@@ -45,6 +52,7 @@ class AppSyncState extends ChangeNotifier {
 
   bool autoSyncEnabled = true;
   SyncFrequency syncFrequency = SyncFrequency.every30Minutes;
+  String? initialSyncMode;
   String scanRange = 'Last 1 Year';
 
   UserSyncState sync = const UserSyncState();
@@ -60,6 +68,13 @@ class AppSyncState extends ChangeNotifier {
   };
 
   bool get hasSyncedData => sync.hasSynced;
+
+  bool get isNewOnlyMode => initialSyncMode == 'new_only';
+
+  bool get canRunIncrementalSync => sync.hasSynced && sync.lastSyncedAt != null;
+
+  bool get showNoResultsMessage =>
+      hasSyncedData && !hasStatsData && initialSyncMode == 'import_history';
 
   bool get hasStatsData =>
       sync.emailsProcessed > 0 ||
@@ -125,6 +140,10 @@ class AppSyncState extends ChangeNotifier {
     memberSince = profile.memberSince;
     isGmailSynced = true;
     sync = profile.sync;
+    autoSyncEnabled = profile.syncSettings.autoSyncEnabled;
+    syncFrequency =
+        SyncFrequency.fromMinutes(profile.syncSettings.syncFrequencyMinutes);
+    initialSyncMode = profile.syncSettings.initialSyncMode;
     selectedPlatformIds
       ..clear()
       ..addAll(profile.jobSources);
@@ -139,6 +158,7 @@ class AppSyncState extends ChangeNotifier {
     userName = '';
     userEmail = '';
     memberSince = '';
+    initialSyncMode = null;
     sync = const UserSyncState();
     selectedPlatformIds.clear();
     notifyListeners();
@@ -154,14 +174,37 @@ class AppSyncState extends ChangeNotifier {
     applyProfile(profile);
   }
 
+  Future<void> saveSyncSettings() async {
+    final profile = await UserApi.instance.updateSyncSettings(
+      autoSyncEnabled: autoSyncEnabled,
+      syncFrequencyMinutes: syncFrequency.minutes,
+    );
+    applyProfile(profile);
+  }
+
+  Future<void> setupNewOnlyTracking(Set<String> ids) async {
+    final profile = await UserApi.instance.setupNewOnlySync(ids);
+    applyProfile(profile);
+  }
+
   void setAutoSync(bool value) {
     autoSyncEnabled = value;
     notifyListeners();
   }
 
+  Future<void> persistAutoSync(bool value) async {
+    setAutoSync(value);
+    await saveSyncSettings();
+  }
+
   void setSyncFrequency(SyncFrequency value) {
     syncFrequency = value;
     notifyListeners();
+  }
+
+  Future<void> persistSyncFrequency(SyncFrequency value) async {
+    setSyncFrequency(value);
+    await saveSyncSettings();
   }
 
   void setNotification(String key, bool value) {
@@ -175,10 +218,19 @@ class AppSyncState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> runSync({DateTime? fromDate, DateTime? toDate}) async {
+  Future<void> runSync({
+    DateTime? fromDate,
+    DateTime? toDate,
+    bool incrementalOnly = false,
+  }) async {
     if (syncButtonState == SyncButtonState.syncing) return;
     syncButtonState = SyncButtonState.syncing;
-    _setSyncStep(SyncStep.connecting, detail: 'Verifying secure access');
+    _setSyncStep(
+      SyncStep.connecting,
+      detail: incrementalOnly
+          ? 'Checking for new emails since last sync'
+          : 'Verifying secure access',
+    );
 
     await UserApi.instance.beginSyncSession();
 
@@ -190,6 +242,7 @@ class AppSyncState extends ChangeNotifier {
       final platformResult = await UserApi.instance.runPlatformSync(
         fromDate: fromDate,
         toDate: toDate,
+        incrementalOnly: incrementalOnly,
       );
 
       UserApi.instance.ensureSyncNotAborted();
@@ -208,6 +261,7 @@ class AppSyncState extends ChangeNotifier {
       final companyResult = await UserApi.instance.runCompanySync(
         fromDate: fromDate,
         toDate: toDate,
+        incrementalOnly: incrementalOnly,
       );
 
       UserApi.instance.ensureSyncNotAborted();
@@ -284,6 +338,8 @@ class AppSyncState extends ChangeNotifier {
       UserApi.instance.endSyncSession();
     }
   }
+
+  Future<void> runIncrementalSync() => runSync(incrementalOnly: true);
 
   Future<void> cancelSync() async {
     if (syncButtonState != SyncButtonState.syncing) return;

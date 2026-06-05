@@ -31,7 +31,9 @@ import { RunSyncDto } from './dto/run-sync.dto';
 import {
   buildGmailQuery,
   formatIsoDate,
+  isAfterSyncCursor,
   matchesPlatform,
+  resolveAutoSyncDateRange,
   resolveIncrementalFromDate,
   resolveSyncDateRange,
 } from './platform-filters';
@@ -76,6 +78,57 @@ export class SyncService {
     });
   }
 
+  async runAutoSync(userId: string): Promise<SyncResultResponse | null> {
+    const user = await this.users.findById(userId);
+    if (!user) return null;
+
+    if (!user.lastGmailInternalDate) {
+      this.logger.warn(`Skipping auto sync for ${userId}: no Gmail cursor`);
+      return null;
+    }
+
+    this.cancellation.beginSync(userId);
+    try {
+      return await this.runSync(userId, { incrementalOnly: true });
+    } finally {
+      this.cancellation.endSync(userId);
+    }
+  }
+
+  private resolveSyncWindow(
+    user: { lastGmailInternalDate?: Date },
+    dto?: RunSyncDto,
+  ): {
+    fromDate: Date;
+    toDate: Date;
+    incrementalFrom: Date;
+    syncCursor?: Date;
+  } {
+    if (dto?.incrementalOnly) {
+      if (!user.lastGmailInternalDate) {
+        throw new BadRequestException(
+          'Incremental sync requires a prior sync cursor',
+        );
+      }
+      const { fromDate, toDate } = resolveAutoSyncDateRange(
+        user.lastGmailInternalDate,
+      );
+      return {
+        fromDate,
+        toDate,
+        incrementalFrom: fromDate,
+        syncCursor: user.lastGmailInternalDate,
+      };
+    }
+
+    const { fromDate, toDate } = resolveSyncDateRange(dto);
+    const incrementalFrom = resolveIncrementalFromDate(
+      user.lastGmailInternalDate,
+      fromDate,
+    );
+    return { fromDate, toDate, incrementalFrom };
+  }
+
   async runPlatformDiscovery(
     userId: string,
     dto?: RunSyncDto,
@@ -91,11 +144,9 @@ export class SyncService {
     }
 
     const tokens = await this.users.getGoogleTokens(userId);
-    const { fromDate, toDate } = resolveSyncDateRange(dto);
-    const incrementalFrom = resolveIncrementalFromDate(
-      user.lastGmailInternalDate,
-      fromDate,
-    );
+    const { fromDate, toDate, incrementalFrom, syncCursor } =
+      this.resolveSyncWindow(user, dto);
+    const gmailAfter = syncCursor ? { afterCursor: syncCursor } : undefined;
 
     let newMessages = 0;
     let skippedProcessed = 0;
@@ -109,6 +160,7 @@ export class SyncService {
         platformId as JobPlatformId,
         incrementalFrom,
         toDate,
+        gmailAfter,
       );
       const messageIds = await this.gmail.listMessageIds(query, tokens);
 
@@ -122,6 +174,11 @@ export class SyncService {
 
         const meta = await this.gmail.getMessageMetadata(messageId, tokens);
         if (!meta) continue;
+
+        if (syncCursor && !isAfterSyncCursor(meta.internalDate, syncCursor)) {
+          skippedProcessed += 1;
+          continue;
+        }
 
         if (
           !matchesPlatform(
@@ -240,13 +297,11 @@ export class SyncService {
     if (!user) throw new NotFoundException('User not found');
 
     const tokens = await this.users.getGoogleTokens(userId);
-    const { fromDate, toDate } = resolveSyncDateRange(dto);
-    const incrementalFrom = resolveIncrementalFromDate(
-      user.lastGmailInternalDate,
-      fromDate,
-    );
+    const { fromDate, toDate, incrementalFrom, syncCursor } =
+      this.resolveSyncWindow(user, dto);
+    const gmailAfter = syncCursor ? { afterCursor: syncCursor } : undefined;
 
-    const isIncremental = !!user.lastGmailInternalDate;
+    const isIncremental = dto?.incrementalOnly ?? false;
     const companies = await this.companyDiscovery.listCompaniesForPhase2(
       userId,
       isIncremental,
@@ -270,6 +325,7 @@ export class SyncService {
         },
         incrementalFrom,
         toDate,
+        gmailAfter,
       );
 
       let companyMessageCount = 0;
@@ -289,6 +345,11 @@ export class SyncService {
 
           const meta = await this.gmail.getMessageMetadata(messageId, tokens);
           if (!meta) continue;
+
+          if (syncCursor && !isAfterSyncCursor(meta.internalDate, syncCursor)) {
+            skippedProcessed += 1;
+            continue;
+          }
 
           companyMessageCount += 1;
           companyEmailsProcessed += 1;

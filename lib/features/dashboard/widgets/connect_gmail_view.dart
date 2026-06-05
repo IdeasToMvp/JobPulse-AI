@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import 'initial_connect_sheet.dart';
 import 'sync_hub_hero.dart';
-import 'sync_prepare_sheet.dart';
 
 class ConnectGmailView extends StatelessWidget {
   const ConnectGmailView({super.key});
@@ -50,10 +50,7 @@ class ConnectGmailView extends StatelessWidget {
             SizedBox(
               height: 48,
               child: FilledButton.icon(
-                onPressed: () => SyncPrepareSheet.show(
-                  context,
-                  onSyncStarted: () {},
-                ),
+                onPressed: () => InitialConnectSheet.show(context),
                 icon: Container(
                   width: 20,
                   height: 20,

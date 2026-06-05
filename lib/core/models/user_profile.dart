@@ -56,6 +56,26 @@ class SyncScanMeta {
   }
 }
 
+class UserSyncSettings {
+  const UserSyncSettings({
+    this.autoSyncEnabled = true,
+    this.syncFrequencyMinutes = 30,
+    this.initialSyncMode,
+  });
+
+  final bool autoSyncEnabled;
+  final int syncFrequencyMinutes;
+  final String? initialSyncMode;
+
+  factory UserSyncSettings.fromJson(Map<String, dynamic> json) {
+    return UserSyncSettings(
+      autoSyncEnabled: json['autoSyncEnabled'] as bool? ?? true,
+      syncFrequencyMinutes: json['syncFrequencyMinutes'] as int? ?? 30,
+      initialSyncMode: json['initialSyncMode'] as String?,
+    );
+  }
+}
+
 class UserSyncState {
   const UserSyncState({
     this.lastSyncedAt,
@@ -114,6 +134,7 @@ class UserProfile {
     this.picture,
     required this.memberSince,
     required this.jobSources,
+    required this.syncSettings,
     required this.sync,
   });
 
@@ -123,6 +144,7 @@ class UserProfile {
   final String? picture;
   final String memberSince;
   final List<String> jobSources;
+  final UserSyncSettings syncSettings;
   final UserSyncState sync;
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
@@ -135,6 +157,9 @@ class UserProfile {
       jobSources: (json['jobSources'] as List<dynamic>? ?? [])
           .map((e) => e as String)
           .toList(),
+      syncSettings: UserSyncSettings.fromJson(
+        json['syncSettings'] as Map<String, dynamic>? ?? {},
+      ),
       sync: UserSyncState.fromJson(
         json['sync'] as Map<String, dynamic>? ?? {},
       ),

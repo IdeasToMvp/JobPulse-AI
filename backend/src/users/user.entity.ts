@@ -13,6 +13,8 @@ export interface SyncScanMeta {
   aiCalls: number;
 }
 
+export type InitialSyncMode = 'new_only' | 'import_history';
+
 export interface UserRecord {
   id: string;
   googleId: string;
@@ -30,6 +32,9 @@ export interface UserRecord {
   activeCount: number;
   interviewsCount: number;
   offersCount: number;
+  autoSyncEnabled: boolean;
+  syncFrequencyMinutes: number;
+  initialSyncMode?: InitialSyncMode;
 }
 
 export interface DbUserRow {
@@ -49,6 +54,9 @@ export interface DbUserRow {
   active_count: number;
   interviews_count: number;
   offers_count: number;
+  auto_sync_enabled: boolean;
+  sync_frequency_minutes: number;
+  initial_sync_mode: string | null;
 }
 
 export interface DbOAuthRow {
@@ -70,6 +78,11 @@ export interface UserProfileResponse {
   picture?: string;
   memberSince: string;
   jobSources: string[];
+  syncSettings: {
+    autoSyncEnabled: boolean;
+    syncFrequencyMinutes: number;
+    initialSyncMode: InitialSyncMode | null;
+  };
   sync: {
     lastSyncedAt: string | null;
     emailsProcessed: number;

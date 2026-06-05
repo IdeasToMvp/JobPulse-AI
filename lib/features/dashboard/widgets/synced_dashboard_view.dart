@@ -7,7 +7,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/glass_card.dart';
 import 'dashboard_sync_button.dart';
 import 'dashboard_syncing_view.dart';
-import 'sync_prepare_sheet.dart';
+import 'sync_options_sheet.dart';
 
 const _platformLabels = {
   'linkedin': 'LinkedIn',
@@ -66,14 +66,14 @@ class _DashboardContent extends StatelessWidget {
           children: [
             _buildGreetingHeader(context, firstName),
             const SizedBox(height: 20),
-            if (state.hasStatsData) ...[
+            if (state.showNoResultsMessage) ...[
+              _buildNoResultsCard(),
+            ] else ...[
               _buildStatsGrid(),
               if (_platformEntries.isNotEmpty) ...[
                 const SizedBox(height: 20),
                 _buildPlatformBreakdown(),
               ],
-            ] else ...[
-              _buildNoResultsCard(),
             ],
           ],
         ),
@@ -112,10 +112,7 @@ class _DashboardContent extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 DashboardSyncButton(
-                  onPressed: () => SyncPrepareSheet.show(
-                    context,
-                    onSyncStarted: () {},
-                  ),
+                  onPressed: () => SyncOptionsSheet.show(context),
                 ),
                 Text(
                   'Last sync: ${state.lastSyncLabel}',

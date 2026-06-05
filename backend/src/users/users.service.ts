@@ -12,10 +12,12 @@ import {
   DbOAuthRow,
   DbUserRow,
   GoogleTokens,
+  InitialSyncMode,
   PlatformSyncStats,
   UserProfileResponse,
   UserRecord,
 } from './user.entity';
+import { formatIsoDate } from '../sync/platform-filters';
 
 export interface UpsertGoogleUserInput {
   googleId: string;
@@ -73,6 +75,84 @@ export class UsersService {
     }
 
     return this.toProfile(user, jobSources, byPlatform, totals);
+  }
+
+  async updateSyncSettings(
+    userId: string,
+    input: { autoSyncEnabled: boolean; syncFrequencyMinutes: number },
+  ): Promise<UserProfileResponse | null> {
+    const { error } = await this.supabase.db
+      .from('users')
+      .update({
+        auto_sync_enabled: input.autoSyncEnabled,
+        sync_frequency_minutes: input.syncFrequencyMinutes,
+      })
+      .eq('id', userId);
+
+    if (error) this.raiseDbError('updateSyncSettings', error);
+    return this.getProfile(userId);
+  }
+
+  async setupNewOnlyTracking(
+    userId: string,
+    platformIds: string[],
+  ): Promise<UserProfileResponse | null> {
+    await this.jobSources.replaceForUser(userId, platformIds);
+
+    const now = new Date();
+    const today = formatIsoDate(now);
+
+    const { error } = await this.supabase.db
+      .from('users')
+      .update({
+        initial_sync_mode: 'new_only',
+        last_synced_at: now.toISOString(),
+        last_gmail_internal_date: now.toISOString(),
+        sync_from_date: today,
+        sync_to_date: today,
+      })
+      .eq('id', userId);
+
+    if (error) this.raiseDbError('setupNewOnlyTracking', error);
+    return this.getProfile(userId);
+  }
+
+  async markImportHistoryMode(userId: string): Promise<void> {
+    const { error } = await this.supabase.db
+      .from('users')
+      .update({ initial_sync_mode: 'import_history' })
+      .eq('id', userId);
+
+    if (error) this.raiseDbError('markImportHistoryMode', error);
+  }
+
+  async listUsersDueForAutoSync(): Promise<UserRecord[]> {
+    const { data, error } = await this.supabase.db
+      .from('users')
+      .select('*')
+      .eq('auto_sync_enabled', true)
+      .gt('sync_frequency_minutes', 0)
+      .not('last_synced_at', 'is', null);
+
+    if (error) this.raiseDbError('listUsersDueForAutoSync', error);
+
+    const now = Date.now();
+    const due: UserRecord[] = [];
+
+    for (const row of data ?? []) {
+      const user = this.mapUser(row as DbUserRow);
+      if (user.syncFrequencyMinutes <= 0) continue;
+
+      const last = user.lastSyncedAt?.getTime();
+      if (last == null) continue;
+
+      const intervalMs = user.syncFrequencyMinutes * 60_000;
+      if (now - last >= intervalMs) {
+        due.push(user);
+      }
+    }
+
+    return due;
   }
 
   async getGoogleTokens(userId: string): Promise<GoogleTokens> {
@@ -222,6 +302,11 @@ export class UsersService {
       picture: user.picture,
       memberSince: this.formatMemberSince(user.createdAt),
       jobSources,
+      syncSettings: {
+        autoSyncEnabled: user.autoSyncEnabled,
+        syncFrequencyMinutes: user.syncFrequencyMinutes,
+        initialSyncMode: user.initialSyncMode ?? null,
+      },
       sync,
     };
   }
@@ -352,6 +437,9 @@ export class UsersService {
       activeCount: row.active_count ?? 0,
       interviewsCount: row.interviews_count ?? 0,
       offersCount: row.offers_count ?? 0,
+      autoSyncEnabled: row.auto_sync_enabled ?? true,
+      syncFrequencyMinutes: row.sync_frequency_minutes ?? 30,
+      initialSyncMode: (row.initial_sync_mode as InitialSyncMode) ?? undefined,
     };
   }
 

@@ -31,16 +31,20 @@ class UserApi {
         'Content-Type': 'application/json',
       };
 
-  Map<String, String> _syncDatePayload({
+  Map<String, dynamic> _syncDatePayload({
     DateTime? fromDate,
     DateTime? toDate,
+    bool incrementalOnly = false,
   }) {
-    final payload = <String, String>{};
+    final payload = <String, dynamic>{};
     if (fromDate != null) {
       payload['fromDate'] = fromDate.toIso8601String().substring(0, 10);
     }
     if (toDate != null) {
       payload['toDate'] = toDate.toIso8601String().substring(0, 10);
+    }
+    if (incrementalOnly) {
+      payload['incrementalOnly'] = true;
     }
     return payload;
   }
@@ -137,13 +141,76 @@ class UserApi {
     return UserProfile.fromJson(userJson);
   }
 
+  Future<UserProfile> updateSyncSettings({
+    required bool autoSyncEnabled,
+    required int syncFrequencyMinutes,
+  }) async {
+    final token = await _token();
+    final response = await http.put(
+      Uri.parse('${AppConfig.apiBaseUrl}/users/sync-settings'),
+      headers: _headers(token),
+      body: jsonEncode({
+        'autoSyncEnabled': autoSyncEnabled,
+        'syncFrequencyMinutes': syncFrequencyMinutes,
+      }),
+    );
+
+    if (response.statusCode != 200) {
+      throw AuthException('Failed to save sync settings');
+    }
+
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final userJson = body['user'] as Map<String, dynamic>?;
+    if (userJson == null) {
+      throw AuthException('Invalid sync settings response');
+    }
+    return UserProfile.fromJson(userJson);
+  }
+
+  Future<UserProfile> setupNewOnlySync(Set<String> platformIds) async {
+    final token = await _token();
+    final response = await http.post(
+      Uri.parse('${AppConfig.apiBaseUrl}/users/initial-sync/new-only'),
+      headers: _headers(token),
+      body: jsonEncode({'platformIds': platformIds.toList()}),
+    );
+
+    if (response.statusCode != 200) {
+      throw AuthException('Failed to start new-email tracking');
+    }
+
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final userJson = body['user'] as Map<String, dynamic>?;
+    if (userJson == null) {
+      throw AuthException('Invalid new-only sync response');
+    }
+    return UserProfile.fromJson(userJson);
+  }
+
+  Future<void> markImportHistorySync() async {
+    final token = await _token();
+    final response = await http.post(
+      Uri.parse('${AppConfig.apiBaseUrl}/users/initial-sync/import-history'),
+      headers: _headers(token),
+    );
+
+    if (response.statusCode != 200) {
+      throw AuthException('Failed to mark import history mode');
+    }
+  }
+
   Future<PlatformSyncResult> runPlatformSync({
     DateTime? fromDate,
     DateTime? toDate,
+    bool incrementalOnly = false,
   }) async {
     final body = await _postSync(
       '/sync/platform',
-      body: _syncDatePayload(fromDate: fromDate, toDate: toDate),
+      body: _syncDatePayload(
+        fromDate: fromDate,
+        toDate: toDate,
+        incrementalOnly: incrementalOnly,
+      ),
     );
     return PlatformSyncResult.fromJson(body);
   }
@@ -151,10 +218,15 @@ class UserApi {
   Future<CompanySyncResult> runCompanySync({
     DateTime? fromDate,
     DateTime? toDate,
+    bool incrementalOnly = false,
   }) async {
     final body = await _postSync(
       '/sync/companies',
-      body: _syncDatePayload(fromDate: fromDate, toDate: toDate),
+      body: _syncDatePayload(
+        fromDate: fromDate,
+        toDate: toDate,
+        incrementalOnly: incrementalOnly,
+      ),
     );
     return CompanySyncResult.fromJson(body);
   }

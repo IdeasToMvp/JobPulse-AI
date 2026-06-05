@@ -17,6 +17,7 @@ describe('AppController (e2e)', () => {
     process.env.GOOGLE_CLIENT_ID = 'test-client-id';
     process.env.GOOGLE_CLIENT_SECRET = 'test-client-secret';
     process.env.OPENAI_API_KEY = 'test-openai-key';
+    process.env.ENABLE_AUTO_SYNC_CRON = 'false';
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],

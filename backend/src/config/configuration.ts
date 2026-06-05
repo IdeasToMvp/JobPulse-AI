@@ -28,4 +28,7 @@ export default () => ({
     .split(',')
     .map((o) => o.trim())
     .filter(Boolean),
+  autoSync: {
+    enabled: process.env.ENABLE_AUTO_SYNC_CRON !== 'false',
+  },
 });

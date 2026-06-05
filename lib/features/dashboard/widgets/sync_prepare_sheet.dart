@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/api/sync_cancelled_exception.dart';
+import '../../../core/api/user_api.dart';
 import '../../../core/app_sync_state.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -24,13 +25,22 @@ enum _SyncStep { sources, dateRange }
 enum _DatePreset { last30Days, last3Months, last1Year }
 
 class SyncPrepareSheet extends StatefulWidget {
-  const SyncPrepareSheet({super.key, required this.onSyncStarted});
+  const SyncPrepareSheet({
+    super.key,
+    required this.onSyncStarted,
+    this.initialPlatformIds,
+    this.skipSourcesStep = false,
+  });
 
   final VoidCallback onSyncStarted;
+  final Set<String>? initialPlatformIds;
+  final bool skipSourcesStep;
 
   static Future<void> show(
     BuildContext context, {
     required VoidCallback onSyncStarted,
+    Set<String>? initialPlatformIds,
+    bool skipSourcesStep = false,
   }) {
     return showModalBottomSheet<void>(
       context: context,
@@ -39,7 +49,11 @@ class SyncPrepareSheet extends StatefulWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (_) => SyncPrepareSheet(onSyncStarted: onSyncStarted),
+      builder: (_) => SyncPrepareSheet(
+        onSyncStarted: onSyncStarted,
+        initialPlatformIds: initialPlatformIds,
+        skipSourcesStep: skipSourcesStep,
+      ),
     );
   }
 
@@ -48,11 +62,19 @@ class SyncPrepareSheet extends StatefulWidget {
 }
 
 class _SyncPrepareSheetState extends State<SyncPrepareSheet> {
-  _SyncStep _step = _SyncStep.sources;
-  final Set<String> _selectedIds =
-      Set<String>.from(AppSyncState.instance.selectedPlatformIds);
+  late _SyncStep _step;
+  late final Set<String> _selectedIds;
   _DatePreset _preset = _DatePreset.last30Days;
   bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _step = widget.skipSourcesStep ? _SyncStep.dateRange : _SyncStep.sources;
+    _selectedIds = widget.initialPlatformIds != null
+        ? Set<String>.from(widget.initialPlatformIds!)
+        : Set<String>.from(AppSyncState.instance.selectedPlatformIds);
+  }
 
   DateTime get _toDate => DateTime.now();
 
@@ -91,6 +113,7 @@ class _SyncPrepareSheetState extends State<SyncPrepareSheet> {
   Future<void> _startSync() async {
     setState(() => _isSaving = true);
     try {
+      await UserApi.instance.markImportHistorySync();
       await AppSyncState.instance.saveJobSources(_selectedIds);
       if (mounted) Navigator.of(context).pop();
       // Start sync immediately so the dashboard shows the syncing state.

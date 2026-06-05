@@ -8,6 +8,7 @@ import { ApplicationLifecycleService } from './application-lifecycle.service';
 import { ApplicationMatcherService } from './application-matcher.service';
 import { CompanyDiscoveryService } from './company-discovery.service';
 import { RuleEngineService } from './rule-engine.service';
+import { AutoSyncCronService } from './auto-sync-cron.service';
 import { SyncCancellationService } from './sync-cancellation.service';
 import { SyncController } from './sync.controller';
 import { SyncService } from './sync.service';
@@ -17,6 +18,7 @@ import { SyncService } from './sync.service';
   controllers: [SyncController],
   providers: [
     SyncService,
+    AutoSyncCronService,
     SyncCancellationService,
     RuleEngineService,
     AiClassifierService,

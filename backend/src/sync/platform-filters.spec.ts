@@ -1,6 +1,9 @@
 import {
   buildGmailQuery,
+  formatGmailAfterInstant,
+  isAfterSyncCursor,
   matchesPlatform,
+  resolveAutoSyncDateRange,
   resolveSyncDateRange,
 } from './platform-filters';
 
@@ -13,6 +16,37 @@ describe('platform-filters', () => {
     );
     expect(query).toContain('from:naukri');
     expect(query).toContain('after:2024/06/05');
+  });
+
+  it('uses epoch after filter when afterCursor is provided', () => {
+    const cursor = new Date('2026-06-05T18:55:39.000Z');
+    const query = buildGmailQuery(
+      'linkedin',
+      new Date('2026-06-05'),
+      new Date('2026-06-05'),
+      { afterCursor: cursor },
+    );
+    expect(query).toContain(formatGmailAfterInstant(cursor));
+    expect(query).not.toContain('after:2026/06/04');
+  });
+
+  it('resolveAutoSyncDateRange uses cursor day without going back a full day', () => {
+    const cursor = new Date('2026-06-05T18:55:39.000Z');
+    const { fromDate } = resolveAutoSyncDateRange(cursor);
+    expect(fromDate.toISOString()).toBe('2026-06-05T00:00:00.000Z');
+  });
+
+  it('isAfterSyncCursor rejects messages at or before cursor', () => {
+    const cursor = new Date('2026-06-05T18:55:39.000Z');
+    expect(isAfterSyncCursor(new Date('2026-06-05T18:55:39.000Z'), cursor)).toBe(
+      false,
+    );
+    expect(isAfterSyncCursor(new Date('2026-06-05T10:00:00.000Z'), cursor)).toBe(
+      false,
+    );
+    expect(isAfterSyncCursor(new Date('2026-06-05T19:00:00.000Z'), cursor)).toBe(
+      true,
+    );
   });
 
   it('matches platform using includes check', () => {

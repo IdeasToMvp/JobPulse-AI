@@ -84,6 +84,7 @@ export class SyncController {
 
     return run().finally(() => {
       req.off('close', onClose);
+      this.cancellation.endSync(userId);
     });
   }
 }

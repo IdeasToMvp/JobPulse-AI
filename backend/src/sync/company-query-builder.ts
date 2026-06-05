@@ -1,4 +1,4 @@
-import { formatGmailDate, addDays } from './platform-filters';
+import { formatGmailDate, addDays, formatGmailAfterInstant } from './platform-filters';
 import { buildPlatformExclusionClause } from './company-domain-hints';
 
 export const MAX_COMPANIES_PER_SYNC = 50;
@@ -16,6 +16,7 @@ export function buildCompanyGmailQueries(
   target: CompanySearchTarget,
   fromDate: Date,
   toDate: Date,
+  options?: { afterCursor?: Date },
 ): string[] {
   const parts: string[] = [];
   for (const domain of target.domains) {
@@ -27,7 +28,9 @@ export function buildCompanyGmailQueries(
 
   if (parts.length === 0) return [];
 
-  const after = formatGmailDate(fromDate);
+  const after = options?.afterCursor
+    ? formatGmailAfterInstant(options.afterCursor)
+    : `after:${formatGmailDate(fromDate)}`;
   const before = formatGmailDate(addDays(toDate, 1));
   const queries: string[] = [];
 

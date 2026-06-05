@@ -20,6 +20,7 @@ export function buildGmailQuery(
   platformId: JobPlatformId,
   fromDate: Date,
   toDate: Date,
+  options?: { afterCursor?: Date },
 ): string {
   const tokens = PLATFORM_INCLUDES[platformId];
   const includesClause = tokens
@@ -31,9 +32,11 @@ export function buildGmailQuery(
     })
     .join(' OR ');
 
-  const after = formatGmailDate(fromDate);
+  const after = options?.afterCursor
+    ? formatGmailAfterInstant(options.afterCursor)
+    : `after:${formatGmailDate(fromDate)}`;
   const before = formatGmailDate(addDays(toDate, 1));
-  return `(${includesClause}) after:${after} before:${before}`;
+  return `(${includesClause}) ${after} before:${before}`;
 }
 
 export function matchesPlatform(
@@ -100,6 +103,29 @@ export function resolveIncrementalFromDate(
   if (!cursor) return rangeFrom;
   const overlap = addDays(cursor, -GMAIL_OVERLAP_DAYS);
   return overlap > rangeFrom ? overlap : rangeFrom;
+}
+
+export function resolveAutoSyncDateRange(cursor: Date): {
+  fromDate: Date;
+  toDate: Date;
+} {
+  const today = startOfUtcDay(new Date());
+  return {
+    fromDate: startOfUtcDay(cursor),
+    toDate: today,
+  };
+}
+
+/** Gmail after: with date only ignores time — use epoch seconds for incremental sync. */
+export function formatGmailAfterInstant(instant: Date): string {
+  return `after:${Math.floor(instant.getTime() / 1000)}`;
+}
+
+export function isAfterSyncCursor(
+  messageDate: Date,
+  cursor: Date,
+): boolean {
+  return messageDate.getTime() > cursor.getTime();
 }
 
 export function formatGmailDate(date: Date): string {

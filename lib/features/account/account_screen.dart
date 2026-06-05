@@ -173,7 +173,7 @@ class AccountScreen extends StatelessWidget {
             title: 'Auto Sync',
             subtitle: 'Automatically scan Gmail for new job updates.',
             value: state.autoSyncEnabled,
-            onChanged: state.setAutoSync,
+            onChanged: (value) => _persistAutoSync(context, state, value),
           ),
           const Divider(color: AppColors.platformsCardBorder, height: 24),
           _dropdownRow(
@@ -185,7 +185,7 @@ class AccountScreen extends StatelessWidget {
               final match = SyncFrequency.values.firstWhere(
                 (f) => f.label == label,
               );
-              state.setSyncFrequency(match);
+              _persistSyncFrequency(context, state, match);
             },
           ),
           const SizedBox(height: 14),
@@ -672,5 +672,35 @@ class AccountScreen extends StatelessWidget {
         );
       },
     );
+  }
+
+  Future<void> _persistAutoSync(
+    BuildContext context,
+    AppSyncState state,
+    bool value,
+  ) async {
+    try {
+      await state.persistAutoSync(value);
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to save sync settings')),
+      );
+    }
+  }
+
+  Future<void> _persistSyncFrequency(
+    BuildContext context,
+    AppSyncState state,
+    SyncFrequency value,
+  ) async {
+    try {
+      await state.persistSyncFrequency(value);
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to save sync settings')),
+      );
+    }
   }
 }
