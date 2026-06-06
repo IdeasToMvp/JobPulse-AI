@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 import { BrandLogo } from "@/components/marketing/brand-logo";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/auth/auth-context";
 
 interface MarketingHeaderProps {
   className?: string;
@@ -12,8 +13,10 @@ interface MarketingHeaderProps {
 
 export function MarketingHeader({ className }: MarketingHeaderProps) {
   const pathname = usePathname();
+  const { isAuthenticated } = useAuth();
   const isLogin = pathname === "/login";
   const isPlatforms = pathname === "/platforms";
+  const isLanding = pathname === "/";
 
   return (
     <header
@@ -22,7 +25,7 @@ export function MarketingHeader({ className }: MarketingHeaderProps) {
         className,
       )}
     >
-      <BrandLogo href="/onboarding" showSubtitle />
+      <BrandLogo href="/" showSubtitle />
 
       {isPlatforms ? (
         <div className="text-right">
@@ -31,12 +34,26 @@ export function MarketingHeader({ className }: MarketingHeaderProps) {
           </p>
           <p className="text-xs font-semibold text-foreground">Step 2 of 2</p>
         </div>
+      ) : isAuthenticated ? (
+        <Link
+          href="/dashboard"
+          className="text-sm font-medium text-primary transition-colors hover:text-primary/80"
+        >
+          Dashboard
+        </Link>
       ) : isLogin ? (
         <Link
-          href="/onboarding"
+          href="/"
           className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
-          Get started
+          Home
+        </Link>
+      ) : isLanding ? (
+        <Link
+          href="/login"
+          className="text-sm font-medium text-primary transition-colors hover:text-primary/80"
+        >
+          Sign in
         </Link>
       ) : (
         <Link

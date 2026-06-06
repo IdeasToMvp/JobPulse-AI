@@ -13,7 +13,7 @@ interface BrandLogoProps {
 
 export function BrandLogo({
   className,
-  href = "/onboarding",
+  href = "/",
   size = "md",
   showSubtitle = false,
   inverted = false,

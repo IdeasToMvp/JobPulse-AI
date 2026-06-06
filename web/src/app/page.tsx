@@ -1,46 +1,47 @@
 "use client";
 
+import { Loader2 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
+import { LandingView } from "@/components/marketing/landing-view";
 import { useAuth } from "@/lib/auth/auth-context";
 
-export default function SplashPage() {
+export default function HomePage() {
   const router = useRouter();
   const { isAuthenticated, isLoading, user } = useAuth();
 
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading || !isAuthenticated || !user) return;
 
-    const timer = setTimeout(() => {
-      if (!isAuthenticated) {
-        router.replace("/onboarding");
-        return;
-      }
+    if (!user.jobSources.length) {
+      router.replace("/platforms");
+      return;
+    }
 
-      if (!user?.jobSources.length) {
-        router.replace("/platforms");
-        return;
-      }
+    router.replace("/dashboard");
+  }, [isAuthenticated, isLoading, router, user]);
 
-      router.replace("/dashboard");
-    }, 1200);
-
-    return () => clearTimeout(timer);
-  }, [isAuthenticated, isLoading, router, user?.jobSources.length]);
-
-  return (
-    <div className="flex min-h-dvh flex-col items-center justify-center bg-splash px-6 text-white">
-      <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/20">
-        <div className="h-8 w-8 animate-pulse rounded-full bg-secondary/80" />
+  if (isLoading) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-white">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
-      <h1 className="text-2xl font-semibold sm:text-3xl">JobPulseAI</h1>
-      <p className="mt-2 text-sm text-white/70 sm:text-base">
-        Syncing your career trajectory
-      </p>
-      <div className="mt-8 h-1.5 w-48 overflow-hidden rounded-full bg-white/10">
-        <div className="h-full w-1/2 animate-pulse rounded-full bg-secondary" />
+    );
+  }
+
+  if (isAuthenticated) {
+    return (
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-white px-6 text-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">Opening your dashboard…</p>
+        <Link href="/dashboard" className="text-sm font-medium text-primary hover:underline">
+          Go to dashboard
+        </Link>
       </div>
-    </div>
-  );
+    );
+  }
+
+  return <LandingView />;
 }

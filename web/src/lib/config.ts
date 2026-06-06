@@ -27,3 +27,9 @@ export function getOAuthCallbackUrl(): string {
     process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3001";
   return `${siteUrl}${appConfig.oauthCallbackPath}`;
 }
+
+/** Direct download URL for the Android APK (e.g. Google Drive export link). */
+export function getAndroidApkDownloadUrl(): string | null {
+  const url = process.env.NEXT_PUBLIC_ANDROID_APK_URL?.trim();
+  return url ? url : null;
+}
