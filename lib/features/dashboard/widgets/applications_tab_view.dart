@@ -6,23 +6,9 @@ import '../../../core/auth/auth_service.dart';
 import '../../../core/models/application.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
-import '../../../core/widgets/glass_card.dart';
 import 'application_detail_sheet.dart';
-import 'application_status_badge.dart';
+import 'application_list_card.dart';
 import 'update_status_sheet.dart';
-
-const _platformLabels = {
-  'linkedin': 'LinkedIn',
-  'naukri': 'Naukri',
-  'indeed': 'Indeed',
-  'instahyre': 'Instahyre',
-  'wellfound': 'Wellfound',
-  'foundit': 'Foundit',
-  'glassdoor': 'Glassdoor',
-  'career_pages': 'Career Pages',
-  'referrals': 'Referrals',
-  'company_direct': 'Company email',
-};
 
 const _statusFilters = [
   _StatusFilter(id: 'applied', label: 'Applied'),
@@ -253,81 +239,14 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
                       separatorBuilder: (_, _) => const SizedBox(height: 10),
                       itemBuilder: (context, index) {
                         final app = filtered[index];
-                        return GlassCard(
-                          padding: const EdgeInsets.all(14),
-                          onTap: () => ApplicationDetailSheet.show(context, app),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      app.company,
-                                      style: AppTextStyles.featureTitle,
-                                    ),
-                                    if ((app.companyApplyCount ?? 0) > 1) ...[
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        '${app.companyApplyCount} applications'
-                                        '${app.companyRoles != null && app.companyRoles!.isNotEmpty ? ' · ${app.companyRoles!.join(', ')}' : ''}',
-                                        style: AppTextStyles.darkStatCaption
-                                            .copyWith(
-                                          color: AppColors.secondary,
-                                          fontSize: 11,
-                                        ),
-                                      ),
-                                    ],
-                                    if (app.role != null) ...[
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        app.role!,
-                                        style: AppTextStyles.darkSubtitle,
-                                      ),
-                                    ],
-                                    const SizedBox(height: 6),
-                                    if (displaySalary(app) != null ||
-                                        displayLocation(app) != null) ...[
-                                      Wrap(
-                                        spacing: 6,
-                                        runSpacing: 4,
-                                        children: [
-                                          if (displaySalary(app) != null)
-                                            _infoChip(displaySalary(app)!),
-                                          if (displayLocation(app) != null)
-                                            _infoChip(displayLocation(app)!),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 6),
-                                    ],
-                                    Text(
-                                      _platformLabels[app.platformId] ??
-                                          app.platformId,
-                                      style: AppTextStyles.darkStatCaption,
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      'Applied ${_formatDate(app.appliedAt)}',
-                                      style: AppTextStyles.darkStatCaption,
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'Updated ${_formatDate(app.updatedAt)}',
-                                      style: AppTextStyles.darkStatCaption
-                                          .copyWith(
-                                        color: AppColors.secondary,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              ApplicationStatusBadge(
-                                status: app.status,
-                                onTap: () => _openStatusUpdate(app),
-                              ),
-                            ],
-                          ),
+                        return ApplicationListCard(
+                          application: app,
+                          onTap: () =>
+                              ApplicationDetailSheet.show(context, app),
+                          onStatusTap: () => _openStatusUpdate(app),
+                          displaySalary: displaySalary,
+                          displayLocation: displayLocation,
+                          formatDate: _formatDate,
                         );
                       },
                     ),
@@ -347,20 +266,6 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
     ];
     return '${months[local.month - 1]} ${local.day}, ${local.year}';
-  }
-
-  Widget _infoChip(String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: AppColors.secondary.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        label,
-        style: AppTextStyles.darkStatCaption.copyWith(fontSize: 10),
-      ),
-    );
   }
 
   Widget _emptyState(String message) {

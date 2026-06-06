@@ -17,16 +17,43 @@ String formatStatusLabel(String status) {
 
 Color statusColor(String status) {
   switch (status) {
+    case 'applied':
+      return StatusColors.applied;
+    case 'active':
+    case 'assessment':
+      return StatusColors.assessment;
     case 'interview':
-      return AppColors.warning;
+      return StatusColors.interview;
     case 'offer':
-      return AppColors.success;
+      return StatusColors.offer;
     case 'rejected':
+      return StatusColors.rejected;
     case 'ghosted':
-      return AppColors.error;
+      return StatusColors.ghosted;
     default:
       return AppColors.secondary;
   }
+}
+
+class StatusCardTheme {
+  const StatusCardTheme({
+    required this.accent,
+    required this.background,
+    required this.border,
+  });
+
+  final Color accent;
+  final Color background;
+  final Color border;
+}
+
+StatusCardTheme statusCardTheme(String status) {
+  final accent = statusColor(status);
+  return StatusCardTheme(
+    accent: accent,
+    background: accent.withValues(alpha: 0.06),
+    border: accent.withValues(alpha: 0.25),
+  );
 }
 
 bool isManualStatus(String status) {

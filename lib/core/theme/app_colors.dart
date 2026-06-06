@@ -68,10 +68,10 @@ class AppColors {
 }
 
 class StatusColors {
-  static const applied = Color(0xFF3B82F6);
+  static const applied = Color(0xFF60A5FA);
   static const assessment = Color(0xFF8B5CF6);
   static const interview = Color(0xFFF59E0B);
   static const offer = Color(0xFF22C55E);
   static const rejected = Color(0xFFEF4444);
-  static const ghosted = Color(0xFF6B7280);
+  static const ghosted = Color(0xFF8E8E98);
 }

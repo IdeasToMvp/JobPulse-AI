@@ -1,0 +1,98 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f7f7fc;
+  --foreground: #111111;
+  --primary: #2e3192;
+  --secondary: #8b5cf6;
+  --tertiary: #6c2a00;
+  --neutral: #77767e;
+  --muted: #f5f5fa;
+  --muted-foreground: #8e8e98;
+  --border: #e8e8ed;
+  --error: #ef4444;
+  --success: #22c55e;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-secondary: var(--secondary);
+  --color-tertiary: var(--tertiary);
+  --color-neutral: var(--neutral);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-error: var(--error);
+  --color-success: var(--success);
+  --color-dashboard: #f5f5fa;
+  --color-onboarding: #f8f8ff;
+  --color-onboarding-hero: #14141f;
+  --color-connect-hub: #1a1a72;
+  --color-connect-secure-badge: #e8f0fe;
+  --color-platforms-selected: #f0eef8;
+  --color-platforms-benefits: #f3f0ff;
+  --color-login-security: #f3f0ff;
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+.bg-splash {
+  background: linear-gradient(180deg, #1a1a40 0%, #0d0d2b 100%);
+}
+
+.bg-login-gradient {
+  background: linear-gradient(180deg, #f0eef8 0%, #ffffff 100%);
+}
+
+.bg-dashboard {
+  background-color: var(--color-dashboard);
+}
+
+.bg-onboarding {
+  background-color: var(--color-onboarding);
+}
+
+.bg-onboarding-hero {
+  background-color: var(--color-onboarding-hero);
+}
+
+.bg-connect-hub {
+  background-color: var(--color-connect-hub);
+}
+
+.bg-platforms-selected {
+  background-color: var(--color-platforms-selected);
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+.bg-platforms-benefits {
+  background-color: var(--color-platforms-benefits);
+}
+
+.bg-login-security {
+  background-color: var(--color-login-security);
+}
