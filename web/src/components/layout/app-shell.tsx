@@ -58,7 +58,9 @@ function NavLink({
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const containedMain = pathname.startsWith("/dashboard/applications");
+  const containedMain =
+    pathname.startsWith("/dashboard/applications") ||
+    pathname.startsWith("/dashboard/activity");
 
   return (
     <div className="flex min-h-dvh bg-dashboard">

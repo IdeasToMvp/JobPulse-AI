@@ -13,6 +13,7 @@ import {
 import { updateApplicationStatus } from "@/lib/api/applications";
 import type {
   Application,
+  ApplicationDetail,
   ManualApplicationStatus,
 } from "@/lib/types/application";
 
@@ -20,7 +21,8 @@ interface UpdateStatusDialogProps {
   application: Application | null;
   open: boolean;
   onClose: () => void;
-  onUpdated: (application: Application) => void;
+  onUpdated: (application: ApplicationDetail) => void;
+  onMoveToActive: (application: Application) => void;
 }
 
 export function UpdateStatusDialog({
@@ -28,6 +30,7 @@ export function UpdateStatusDialog({
   open,
   onClose,
   onUpdated,
+  onMoveToActive,
 }: UpdateStatusDialogProps) {
   const [pendingStatus, setPendingStatus] =
     useState<ManualApplicationStatus | null>(null);
@@ -43,6 +46,12 @@ export function UpdateStatusDialog({
       `Change status from ${formatStatusLabel(application.status)} to ${formatStatusLabel(status)}?`,
     );
     if (!confirmed) return;
+
+    if (status === "active" && application.status === "applied") {
+      onClose();
+      onMoveToActive(application);
+      return;
+    }
 
     setPendingStatus(status);
     setIsSubmitting(true);
@@ -89,7 +98,7 @@ export function UpdateStatusDialog({
                 type="button"
                 disabled={isCurrent || isSubmitting}
                 onClick={() => void handleSelect(status)}
-                className="flex min-h-12 w-full touch-manipulation items-center justify-between rounded-xl border border-border px-4 py-3 text-left transition-colors active:bg-muted/50 hover:border-primary/30 hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-60"
+                className="flex min-h-12 w-full touch-manipulation items-center justify-between rounded-xl border border-border px-4 py-3 text-left transition-colors hover:border-primary/30 hover:bg-muted/40 active:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <span className="text-sm font-medium">
                   {formatStatusLabel(status)}

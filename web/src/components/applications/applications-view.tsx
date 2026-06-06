@@ -3,6 +3,7 @@
 import { Briefcase, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { ActiveDetailsDialog } from "@/components/applications/active-details-dialog";
 import { ApplicationCard } from "@/components/applications/application-card";
 import { ApplicationDetailDialog } from "@/components/applications/application-detail-dialog";
 import { ApplicationStatusFilters } from "@/components/applications/application-status-filters";
@@ -15,7 +16,7 @@ import { Card } from "@/components/ui/card";
 import { fetchApplications } from "@/lib/api/applications";
 import { useAuth } from "@/lib/auth/auth-context";
 import { STATUS_FILTERS } from "@/lib/constants/application-status";
-import type { Application, StatusFilterId } from "@/lib/types/application";
+import type { Application, ApplicationDetail, StatusFilterId } from "@/lib/types/application";
 import type { UserProfile } from "@/lib/types/user";
 import { filterApplications } from "@/lib/utils/application";
 import { formatLastSync } from "@/lib/utils/dashboard";
@@ -51,6 +52,14 @@ function SyncedApplicationsContent({
   const [detailOpen, setDetailOpen] = useState(false);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [statusTarget, setStatusTarget] = useState<Application | null>(null);
+  const [activeDetailsOpen, setActiveDetailsOpen] = useState(false);
+  const [activeDetailsApp, setActiveDetailsApp] = useState<Application | null>(
+    null,
+  );
+  const [activeDetailsMode, setActiveDetailsMode] = useState<
+    "editOnly" | "statusWithDetails"
+  >("editOnly");
+  const [detailRefreshKey, setDetailRefreshKey] = useState(0);
   const [syncOptionsOpen, setSyncOptionsOpen] = useState(false);
   const [syncPrepareOpen, setSyncPrepareOpen] = useState(false);
 
@@ -86,14 +95,30 @@ function SyncedApplicationsContent({
       .finally(() => setIsLoading(false));
   }
 
-  function handleApplicationUpdated(updated: Application) {
+  function handleApplicationUpdated(updated: ApplicationDetail) {
     setApplications((current) =>
       current.map((app) => (app.id === updated.id ? updated : app)),
     );
     setSelectedApp((current) =>
       current?.id === updated.id ? updated : current,
     );
+    setStatusTarget((current) =>
+      current?.id === updated.id ? updated : current,
+    );
+    setDetailRefreshKey((current) => current + 1);
     void refreshUser();
+  }
+
+  function openEditDetails(app: Application) {
+    setActiveDetailsApp(app);
+    setActiveDetailsMode("editOnly");
+    setActiveDetailsOpen(true);
+  }
+
+  function openActiveStatusDetails(app: Application) {
+    setActiveDetailsApp(app);
+    setActiveDetailsMode("statusWithDetails");
+    setActiveDetailsOpen(true);
   }
 
   function openDetail(app: Application) {
@@ -111,18 +136,29 @@ function SyncedApplicationsContent({
       <ApplicationDetailDialog
         application={selectedApp}
         open={detailOpen}
+        refreshKey={detailRefreshKey}
         onClose={() => setDetailOpen(false)}
         onUpdateStatus={() => {
           if (!selectedApp) return;
           setDetailOpen(false);
           openStatusUpdate(selectedApp);
         }}
+        onEditDetails={openEditDetails}
       />
 
       <UpdateStatusDialog
         application={statusTarget}
         open={statusDialogOpen}
         onClose={() => setStatusDialogOpen(false)}
+        onUpdated={handleApplicationUpdated}
+        onMoveToActive={openActiveStatusDetails}
+      />
+
+      <ActiveDetailsDialog
+        application={activeDetailsApp}
+        open={activeDetailsOpen}
+        mode={activeDetailsMode}
+        onClose={() => setActiveDetailsOpen(false)}
         onUpdated={handleApplicationUpdated}
       />
 

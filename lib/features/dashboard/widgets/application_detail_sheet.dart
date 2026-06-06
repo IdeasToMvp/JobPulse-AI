@@ -124,10 +124,6 @@ class _ApplicationDetailSheetState extends State<ApplicationDetailSheet> {
     );
   }
 
-  bool get _canEditDetails =>
-      _application.status == 'active' ||
-      (_application.userDetails?.hasAny ?? false);
-
   @override
   Widget build(BuildContext context) {
     final maxHeight = MediaQuery.sizeOf(context).height * 0.85;
@@ -205,15 +201,14 @@ class _ApplicationDetailSheetState extends State<ApplicationDetailSheet> {
                       style: AppTextStyles.featureTitle.copyWith(fontSize: 14),
                     ),
                   ),
-                  if (_canEditDetails)
-                    TextButton(
-                      onPressed: _openDetailsEdit,
-                      child: Text(
-                        _application.userDetails!.hasAny
-                            ? 'Edit details'
-                            : 'Add details',
-                      ),
+                  TextButton(
+                    onPressed: _openDetailsEdit,
+                    child: Text(
+                      _application.userDetails!.hasAny
+                          ? 'Edit details'
+                          : 'Add details',
                     ),
+                  ),
                 ],
               ),
               const SizedBox(height: 8),
@@ -244,7 +239,7 @@ class _ApplicationDetailSheetState extends State<ApplicationDetailSheet> {
               ],
               if (_application.userDetails?.notes != null)
                 _detailRow('Notes', _application.userDetails!.notes!),
-            ] else if (_canEditDetails) ...[
+            ] else ...[
               const SizedBox(height: 16),
               Align(
                 alignment: Alignment.centerLeft,

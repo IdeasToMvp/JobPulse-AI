@@ -29,7 +29,7 @@ export interface ApplicationUserDetails {
   location?: string;
   salary?: string;
   numberOfRounds?: number;
-  workMode?: string;
+  workMode?: "remote" | "hybrid" | "onsite";
   notes?: string;
   updatedAt?: string;
 }
@@ -70,6 +70,10 @@ export interface ApplicationDetail extends Application {
 export interface UpdateApplicationStatusResult {
   application: ApplicationDetail;
   sync: Record<string, unknown>;
+}
+
+export interface UpdateApplicationDetailsResult {
+  application: ApplicationDetail;
 }
 
 export type StatusFilterId =

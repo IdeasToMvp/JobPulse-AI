@@ -75,7 +75,7 @@ class _UpdateStatusSheetState extends State<UpdateStatusSheet> {
 
     if (confirmed != true || !mounted) return;
 
-    if (status == 'active' && widget.application.status != 'active') {
+    if (status == 'active' && widget.application.status == 'applied') {
       await ActiveDetailsSheet.show(
         context,
         application: widget.application,

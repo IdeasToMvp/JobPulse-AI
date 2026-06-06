@@ -1,7 +1,7 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { ApplicationStatusBadge } from "@/components/applications/application-status-badge";
 import { Button } from "@/components/ui/button";
@@ -10,19 +10,23 @@ import { formatStatusLabel } from "@/lib/constants/application-status";
 import { getPlatformLabel } from "@/lib/constants/platform-labels";
 import type { Application, ApplicationDetail } from "@/lib/types/application";
 import {
-  displayLocation,
-  displaySalary,
   formatApplicationDate,
+  formatSalaryDisplay,
+  formatWorkMode,
+  hasExtractedDetails,
+  hasUserDetails,
 } from "@/lib/utils/application";
 
 interface ApplicationDetailContentProps {
   application: Application;
   onUpdateStatus: () => void;
+  onEditDetails: () => void;
 }
 
 function ApplicationDetailContent({
   application,
   onUpdateStatus,
+  onEditDetails,
 }: ApplicationDetailContentProps) {
   const [detail, setDetail] = useState<ApplicationDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -48,6 +52,8 @@ function ApplicationDetailContent({
   }, [application.id]);
 
   const data = detail ?? application;
+  const userDetails = data.userDetails;
+  const showUserSection = hasUserDetails(userDetails);
 
   if (isLoading) {
     return (
@@ -66,7 +72,7 @@ function ApplicationDetailContent({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           {data.role ? (
-            <p className="text-base font-semibold leading-snug text-foreground break-words sm:text-lg">
+            <p className="text-base font-semibold leading-snug break-words text-foreground sm:text-lg">
               {data.role}
             </p>
           ) : null}
@@ -78,19 +84,104 @@ function ApplicationDetailContent({
       </div>
 
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3">
-        <DetailField label="Applied" value={formatApplicationDate(data.appliedAt)} />
-        <DetailField label="Updated" value={formatApplicationDate(data.updatedAt)} />
-        {displaySalary(data) ? (
-          <DetailField label="Salary" value={displaySalary(data)!} />
-        ) : null}
-        {displayLocation(data) ? (
-          <DetailField label="Location" value={displayLocation(data)!} />
-        ) : null}
+        <DetailField label="Source" value={getPlatformLabel(data.platformId)} />
+        <DetailField
+          label="Applied"
+          value={formatApplicationDate(data.appliedAt)}
+        />
+        <DetailField
+          label="Last updated"
+          value={formatApplicationDate(data.updatedAt)}
+        />
       </div>
+
+      {showUserSection ? (
+        <section>
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-foreground">
+              Your details
+            </p>
+            <button
+              type="button"
+              onClick={onEditDetails}
+              className="min-h-10 touch-manipulation text-sm font-semibold text-secondary hover:underline"
+            >
+              Edit details
+            </button>
+          </div>
+          <div className="space-y-2">
+            {userDetails?.location ? (
+              <DetailField label="Location" value={userDetails.location} />
+            ) : null}
+            {userDetails?.salary ? (
+              <DetailField
+                label="Salary"
+                value={formatSalaryDisplay(userDetails.salary)}
+              />
+            ) : null}
+            {userDetails?.numberOfRounds != null ? (
+              <DetailField
+                label="Rounds"
+                value={String(userDetails.numberOfRounds)}
+              />
+            ) : null}
+            {userDetails?.workMode ? (
+              <DetailField
+                label="Work mode"
+                value={formatWorkMode(userDetails.workMode)}
+              />
+            ) : null}
+            {userDetails?.notes ? (
+              <DetailField label="Notes" value={userDetails.notes} />
+            ) : null}
+          </div>
+        </section>
+      ) : (
+        <Button
+          variant="ghost"
+          className="min-h-11 px-0 text-secondary hover:bg-transparent hover:underline"
+          onClick={onEditDetails}
+        >
+          Add details
+        </Button>
+      )}
+
+      {hasExtractedDetails(data.extractedDetails) ? (
+        <section>
+          <p className="mb-2 text-sm font-semibold text-foreground">
+            From email
+          </p>
+          <div className="space-y-2">
+            {data.extractedDetails?.role ? (
+              <DetailField label="Role" value={data.extractedDetails.role} />
+            ) : null}
+            {data.extractedDetails?.salary ? (
+              <DetailField
+                label="Salary"
+                value={formatSalaryDisplay(data.extractedDetails.salary)}
+              />
+            ) : null}
+            {data.extractedDetails?.location ? (
+              <DetailField
+                label="Location"
+                value={data.extractedDetails.location}
+              />
+            ) : null}
+            {data.extractedDetails?.employmentType ? (
+              <DetailField
+                label="Type"
+                value={data.extractedDetails.employmentType}
+              />
+            ) : null}
+          </div>
+        </section>
+      ) : null}
 
       {(data.companyApplyCount ?? 0) > 1 ? (
         <div className="rounded-xl border border-border bg-muted/30 p-3">
-          <p className="text-xs font-medium text-muted-foreground">At this company</p>
+          <p className="text-xs font-medium text-muted-foreground">
+            At this company
+          </p>
           <p className="mt-1 text-sm font-semibold">
             {data.companyApplyCount} applications tracked
           </p>
@@ -135,15 +226,19 @@ function ApplicationDetailContent({
 interface ApplicationDetailDialogProps {
   application: Application | null;
   open: boolean;
+  refreshKey?: number;
   onClose: () => void;
   onUpdateStatus: () => void;
+  onEditDetails: (application: Application) => void;
 }
 
 export function ApplicationDetailDialog({
   application,
   open,
+  refreshKey = 0,
   onClose,
   onUpdateStatus,
+  onEditDetails,
 }: ApplicationDetailDialogProps) {
   return (
     <ModalShell
@@ -153,9 +248,10 @@ export function ApplicationDetailDialog({
     >
       {application ? (
         <ApplicationDetailContent
-          key={application.id}
+          key={`${application.id}-${refreshKey}`}
           application={application}
           onUpdateStatus={onUpdateStatus}
+          onEditDetails={() => onEditDetails(application)}
         />
       ) : null}
     </ModalShell>
@@ -171,7 +267,7 @@ function ModalShell({
   open: boolean;
   onClose: () => void;
   title: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   if (!open) return null;
 
