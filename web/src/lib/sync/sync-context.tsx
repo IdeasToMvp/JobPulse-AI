@@ -26,6 +26,7 @@ import type {
   SyncButtonState,
   SyncStep,
 } from "@/lib/sync/sync-types";
+import { hasUsableSyncData } from "@/lib/utils/dashboard";
 
 interface SyncContextValue {
   syncButtonState: SyncButtonState;
@@ -53,7 +54,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const [syncStepDetail, setSyncStepDetail] = useState<string | null>(null);
 
   const canRunIncrementalSync = Boolean(
-    user?.sync.hasSynced && user.sync.lastSyncedAt,
+    user && hasUsableSyncData(user.sync) && user.sync.lastSyncedAt,
   );
 
   const setStep = useCallback((step: SyncStep, detail?: string) => {
@@ -150,8 +151,12 @@ export function SyncProvider({ children }: { children: ReactNode }) {
           setSyncButtonState("syncing");
           setStep("finalizing", "Saving progress…");
           try {
-            const syncResult = await finalizeSyncStats();
-            mergeUserSync(syncResult);
+            try {
+              const syncResult = await finalizeSyncStats();
+              mergeUserSync(syncResult);
+            } catch {
+              // Server may have finalized when the sync request was cancelled.
+            }
             await refreshUser();
           } catch {
             try {
@@ -169,8 +174,12 @@ export function SyncProvider({ children }: { children: ReactNode }) {
           setSyncButtonState("syncing");
           setStep("finalizing", "Saving progress…");
           try {
-            const syncResult = await finalizeSyncStats();
-            mergeUserSync(syncResult);
+            try {
+              const syncResult = await finalizeSyncStats();
+              mergeUserSync(syncResult);
+            } catch {
+              // ignore
+            }
             await refreshUser();
           } catch {
             try {

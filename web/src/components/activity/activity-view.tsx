@@ -16,6 +16,7 @@ import { ACTIVITY_FILTERS } from "@/lib/constants/activity-filters";
 import type { ActivityFilterId, ActivityItem } from "@/lib/types/activity";
 import type { Application, ApplicationDetail } from "@/lib/types/application";
 import { groupActivityItems } from "@/lib/utils/activity";
+import { hasUsableSyncData } from "@/lib/utils/dashboard";
 
 const PAGE_SIZE = 20;
 
@@ -24,7 +25,7 @@ export function ActivityView() {
 
   if (!user) return null;
 
-  if (!user.sync.hasSynced) {
+  if (!hasUsableSyncData(user.sync)) {
     return (
       <EmptyState message="No activity yet. Connect Gmail and start tracking applications." />
     );

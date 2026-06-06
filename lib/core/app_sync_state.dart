@@ -69,11 +69,11 @@ class AppSyncState extends ChangeNotifier {
     'rejected_notifications': false,
   };
 
-  bool get hasSyncedData => sync.hasSynced;
+  bool get hasSyncedData => sync.hasSynced || hasStatsData;
 
   bool get isNewOnlyMode => initialSyncMode == 'new_only';
 
-  bool get canRunIncrementalSync => sync.hasSynced && sync.lastSyncedAt != null;
+  bool get canRunIncrementalSync => hasSyncedData && sync.lastSyncedAt != null;
 
   bool get showNoResultsMessage =>
       hasSyncedData && !hasStatsData && initialSyncMode == 'import_history';
@@ -81,8 +81,12 @@ class AppSyncState extends ChangeNotifier {
   bool get hasStatsData =>
       sync.emailsProcessed > 0 ||
       sync.applicationsCount > 0 ||
+      sync.appliedCount > 0 ||
+      sync.activeCount > 0 ||
       sync.interviewsCount > 0 ||
-      sync.offersCount > 0;
+      sync.offersCount > 0 ||
+      sync.rejectedCount > 0 ||
+      sync.ghostedCount > 0;
 
   int get emailsProcessed => sync.emailsProcessed;
   int get applicationsFound => sync.applicationsCount;
@@ -333,6 +337,7 @@ class AppSyncState extends ChangeNotifier {
       if (result.scan != null) {
         scanRange = '${result.scan!.fromDate} → ${result.scan!.toDate}';
       }
+      bumpFeedRevision();
       if (kDebugMode) {
         debugPrint(
           'Sync complete → emails: ${result.emailsProcessed}, '
@@ -360,9 +365,11 @@ class AppSyncState extends ChangeNotifier {
         if (sync.scan != null) {
           scanRange = '${sync.scan!.fromDate} → ${sync.scan!.toDate}';
         }
+        bumpFeedRevision();
       } catch (_) {
         try {
           await refreshProfile();
+          bumpFeedRevision();
         } catch (_) {}
       }
       syncStep = SyncStep.idle;

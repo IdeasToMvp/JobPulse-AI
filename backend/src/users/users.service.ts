@@ -63,15 +63,19 @@ export class UsersService {
   }
 
   async getProfile(userId: string): Promise<UserProfileResponse | null> {
-    const user = await this.findById(userId);
+    let user = await this.findById(userId);
     if (!user) return null;
 
     const jobSources = await this.jobSources.getForUser(userId);
-    const { totals, byPlatform } =
+    let { totals, byPlatform } =
       await this.applications.computeAggregates(userId);
 
+    user = await this.repairOrphanedPartialSync(userId, user, totals);
+
     if (this.hasStaleSyncCounts(user, totals)) {
-      await this.applications.recomputeAggregates(userId);
+      ({ totals, byPlatform } =
+        await this.applications.recomputeAggregates(userId));
+      user = (await this.findById(userId)) ?? user;
     }
 
     return this.toProfile(user, jobSources, byPlatform, totals);
@@ -301,7 +305,7 @@ export class UsersService {
       offersCount: liveTotals?.offersCount ?? user.offersCount,
       rejectedCount: liveTotals?.rejectedCount ?? user.rejectedCount,
       ghostedCount: liveTotals?.ghostedCount ?? user.ghostedCount,
-      hasSynced: user.lastSyncedAt != null,
+      hasSynced: this.resolveHasSynced(user, liveTotals),
     };
 
     if (Object.keys(byPlatform).length > 0) {
@@ -358,6 +362,42 @@ export class UsersService {
       user.rejectedCount !== totals.rejectedCount ||
       user.ghostedCount !== totals.ghostedCount
     );
+  }
+
+  private resolveHasSynced(
+    user: UserRecord,
+    liveTotals?: Pick<UserRecord, 'appliedCount' | 'emailsProcessed'>,
+  ): boolean {
+    if (user.lastSyncedAt != null) return true;
+    if (!liveTotals) return false;
+    return liveTotals.appliedCount > 0 || liveTotals.emailsProcessed > 0;
+  }
+
+  private async repairOrphanedPartialSync(
+    userId: string,
+    user: UserRecord,
+    totals: Pick<UserRecord, 'appliedCount' | 'emailsProcessed'>,
+  ): Promise<UserRecord> {
+    if (user.lastSyncedAt != null) return user;
+    if (totals.appliedCount === 0 && totals.emailsProcessed === 0) {
+      return user;
+    }
+
+    const now = new Date();
+    this.logger.log(
+      `Repairing orphaned partial sync for user ${userId} ` +
+        `(applications=${totals.appliedCount}, emails=${totals.emailsProcessed})`,
+    );
+
+    await this.applications.updateUserSyncCursor(userId, {
+      lastSyncedAt: now,
+      lastGmailInternalDate: user.lastGmailInternalDate ?? now,
+      syncFromDate: user.syncFromDate ?? now,
+      syncToDate: user.syncToDate ?? now,
+    });
+    await this.applications.recomputeAggregates(userId);
+
+    return (await this.findById(userId)) ?? user;
   }
 
   private async insertUser(input: UpsertGoogleUserInput): Promise<UserRecord> {

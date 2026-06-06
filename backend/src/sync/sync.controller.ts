@@ -10,6 +10,7 @@ import type { AuthenticatedRequest } from '../auth/jwt-auth.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FinalizeSyncDto } from './dto/finalize-sync.dto';
 import { RunSyncDto } from './dto/run-sync.dto';
+import { SyncCancelledException } from './sync-cancelled.exception';
 import { SyncCancellationService } from './sync-cancellation.service';
 import { SyncService } from './sync.service';
 
@@ -82,9 +83,16 @@ export class SyncController {
     const onClose = () => this.cancellation.cancel(userId);
     req.on('close', onClose);
 
-    return run().finally(() => {
-      req.off('close', onClose);
-      this.cancellation.endSync(userId);
-    });
+    return run()
+      .catch(async (error: unknown) => {
+        if (error instanceof SyncCancelledException) {
+          await this.sync.finalizePartialSync(userId);
+        }
+        throw error;
+      })
+      .finally(() => {
+        req.off('close', onClose);
+        this.cancellation.endSync(userId);
+      });
   }
 }

@@ -9,6 +9,7 @@ import { DashboardSyncingView } from "@/components/dashboard/dashboard-syncing-v
 import { SyncedDashboardView } from "@/components/dashboard/synced-dashboard-view";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useSync } from "@/lib/sync/sync-context";
+import { hasUsableSyncData } from "@/lib/utils/dashboard";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -39,7 +40,7 @@ export default function DashboardPage() {
     return <DashboardSyncingView />;
   }
 
-  if (!user.sync.hasSynced) {
+  if (!hasUsableSyncData(user.sync)) {
     return <ConnectGmailView user={user} />;
   }
 

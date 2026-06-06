@@ -27,9 +27,18 @@ export function hasStatsData(sync: UserSyncState): boolean {
   return (
     sync.emailsProcessed > 0 ||
     sync.applicationsCount > 0 ||
+    sync.appliedCount > 0 ||
+    sync.activeCount > 0 ||
     sync.interviewsCount > 0 ||
-    sync.offersCount > 0
+    sync.offersCount > 0 ||
+    sync.rejectedCount > 0 ||
+    sync.ghostedCount > 0
   );
+}
+
+/** True when the user has completed sync or has saved partial sync data. */
+export function hasUsableSyncData(sync: UserSyncState): boolean {
+  return sync.hasSynced || hasStatsData(sync);
 }
 
 export function showNoResultsMessage(user: UserProfile): boolean {

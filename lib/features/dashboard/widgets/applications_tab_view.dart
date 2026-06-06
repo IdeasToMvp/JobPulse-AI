@@ -32,6 +32,7 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
   String? _error;
   DateTime? _lastSyncAt;
   int _lastFeedRevision = 0;
+  int _lastAppliedCount = 0;
   String _statusFilter = 'applied';
 
   @override
@@ -39,6 +40,7 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
     super.initState();
     _lastSyncAt = AppSyncState.instance.sync.lastSyncedAt;
     _lastFeedRevision = AppSyncState.instance.feedRevision;
+    _lastAppliedCount = AppSyncState.instance.sync.appliedCount;
     AppSyncState.instance.addListener(_onSyncStateChanged);
     _load();
   }
@@ -52,10 +54,13 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
   void _onSyncStateChanged() {
     final syncAt = AppSyncState.instance.sync.lastSyncedAt;
     final feedRevision = AppSyncState.instance.feedRevision;
+    final appliedCount = AppSyncState.instance.sync.appliedCount;
     if ((syncAt != null && syncAt != _lastSyncAt) ||
-        feedRevision != _lastFeedRevision) {
+        feedRevision != _lastFeedRevision ||
+        appliedCount != _lastAppliedCount) {
       _lastSyncAt = syncAt;
       _lastFeedRevision = feedRevision;
+      _lastAppliedCount = appliedCount;
       _load();
     }
   }
@@ -170,7 +175,82 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
         }
 
         if (_applications.isEmpty) {
-          return _emptyState('No applications found for your selected sources.');
+          final countsAheadOfList =
+              AppSyncState.instance.sync.appliedCount > 0;
+          return ColoredBox(
+            color: AppColors.dashboardBackground,
+            child: RefreshIndicator(
+              onRefresh: _load,
+              child: CustomScrollView(
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Applications',
+                            style: AppTextStyles.darkGreeting.copyWith(
+                              fontSize: 22,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: [
+                                for (var i = 0;
+                                    i < _statusFilters.length;
+                                    i++) ...[
+                                  if (i > 0) const SizedBox(width: 8),
+                                  _FilterChip(
+                                    label: _filterLabel(_statusFilters[i]),
+                                    selected: _statusFilter ==
+                                        _statusFilters[i].id,
+                                    onTap: () => setState(
+                                      () => _statusFilter =
+                                          _statusFilters[i].id,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.work_outline_rounded,
+                              size: 48,
+                              color: AppColors.secondary.withValues(alpha: 0.5),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              countsAheadOfList
+                                  ? 'Sync was stopped before the list finished loading. Pull down to refresh applications found so far.'
+                                  : 'No applications found for your selected sources.',
+                              textAlign: TextAlign.center,
+                              style: AppTextStyles.darkSubtitle,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
         }
 
         final filtered = _filteredApplications;

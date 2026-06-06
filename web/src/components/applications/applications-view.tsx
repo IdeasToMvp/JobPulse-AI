@@ -19,14 +19,14 @@ import { STATUS_FILTERS } from "@/lib/constants/application-status";
 import type { Application, ApplicationDetail, StatusFilterId } from "@/lib/types/application";
 import type { UserProfile } from "@/lib/types/user";
 import { filterApplications } from "@/lib/utils/application";
-import { formatLastSync } from "@/lib/utils/dashboard";
+import { formatLastSync, hasUsableSyncData } from "@/lib/utils/dashboard";
 
 export function ApplicationsView() {
   const { user, refreshUser } = useAuth();
 
   if (!user) return null;
 
-  if (!user.sync.hasSynced) {
+  if (!hasUsableSyncData(user.sync)) {
     return (
       <EmptyState message="Sync Gmail to start tracking your job applications." />
     );
@@ -83,7 +83,7 @@ function SyncedApplicationsContent({
     return () => {
       cancelled = true;
     };
-  }, [user.sync.lastSyncedAt]);
+  }, [user.sync.lastSyncedAt, user.sync.appliedCount]);
 
   function reloadApplications() {
     setIsLoading(true);
@@ -203,18 +203,42 @@ function SyncedApplicationsContent({
     );
   }
 
+  const filtered = filterApplications(applications, statusFilter);
+  const activeFilterLabel =
+    STATUS_FILTERS.find((filter) => filter.id === statusFilter)?.label ?? "";
+  const countsAheadOfList =
+    user.sync.appliedCount > 0 && applications.length === 0;
+
   if (applications.length === 0) {
     return (
       <>
-        <EmptyState message="No applications found for your selected sources." />
+        <ApplicationsPageShell
+          user={user}
+          statusFilter={statusFilter}
+          onFilterChange={setStatusFilter}
+          applicationsCount={0}
+          onSyncClick={() => setSyncOptionsOpen(true)}
+        >
+          <Card padding="md" className="text-center">
+            <p className="text-sm text-muted-foreground">
+              {countsAheadOfList
+                ? "Sync was stopped before the list finished loading. Tap refresh to load applications found so far."
+                : "No applications found for your selected sources."}
+            </p>
+            {countsAheadOfList ? (
+              <Button
+                className="mt-4 min-h-11"
+                onClick={reloadApplications}
+              >
+                Refresh list
+              </Button>
+            ) : null}
+          </Card>
+        </ApplicationsPageShell>
         {dialogs}
       </>
     );
   }
-
-  const filtered = filterApplications(applications, statusFilter);
-  const activeFilterLabel =
-    STATUS_FILTERS.find((filter) => filter.id === statusFilter)?.label ?? "";
 
   return (
     <>
