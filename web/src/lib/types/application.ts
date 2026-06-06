@@ -1,3 +1,5 @@
+import type { UserSyncState } from "./user";
+
 export type ApplicationStatus =
   | "applied"
   | "active"
@@ -70,7 +72,7 @@ export interface ApplicationDetail extends Application {
 
 export interface UpdateApplicationStatusResult {
   application: ApplicationDetail;
-  sync: Record<string, unknown>;
+  sync: UserSyncState;
 }
 
 export interface UpdateApplicationDetailsResult {
@@ -88,7 +90,7 @@ export interface CreateManualApplicationInput {
 
 export interface CreateManualApplicationResult {
   application: ApplicationDetail;
-  sync: UpdateApplicationStatusResult["sync"];
+  sync: UserSyncState;
 }
 
 export type StatusFilterId =

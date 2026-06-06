@@ -111,7 +111,7 @@ function AddApplicationForm({
         details: hasDetails ? optionalDetails : undefined,
       });
 
-      onCreated(result.application, result.sync as UserSyncState);
+      onCreated(result.application, result.sync);
       onClose();
     } catch {
       setError("Could not save application. Check the fields and try again.");
