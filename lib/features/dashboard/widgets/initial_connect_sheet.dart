@@ -137,7 +137,7 @@ class _InitialConnectSheetState extends State<InitialConnectSheet> {
         _modeOption(
           title: 'Import Existing Job History',
           subtitle:
-              'Scan past emails from LinkedIn, Indeed, and your other sources.',
+              'Scan the last 10 days from LinkedIn, Indeed, and your other sources.',
           icon: Icons.history_rounded,
           mode: _ConnectMode.importHistory,
         ),
@@ -317,7 +317,7 @@ class _InitialConnectSheetState extends State<InitialConnectSheet> {
                 : Text(
                     _mode == _ConnectMode.trackNew
                         ? 'Start Tracking'
-                        : 'Choose Scan Range',
+                        : 'Start Sync',
                   ),
           ),
         ),

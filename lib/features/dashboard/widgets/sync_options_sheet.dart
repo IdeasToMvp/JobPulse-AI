@@ -85,7 +85,7 @@ class SyncOptionsSheet extends StatelessWidget {
           _optionTile(
             icon: Icons.history_rounded,
             title: 'Rescan email history',
-            subtitle: 'Choose a date range and scan past job emails',
+            subtitle: 'Rescan the last 10 days of job emails',
             onTap: () {
               Navigator.of(context).pop();
               SyncPrepareSheet.show(context, onSyncStarted: () {});

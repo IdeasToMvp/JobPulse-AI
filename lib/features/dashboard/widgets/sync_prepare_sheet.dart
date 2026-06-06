@@ -8,6 +8,8 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../platforms/models/job_platform.dart';
 import '../../platforms/widgets/platform_card.dart';
 
+const mvpSyncRangeDays = 10;
+
 const _platformLabels = {
   'linkedin': 'LinkedIn',
   'naukri': 'Naukri',
@@ -19,10 +21,6 @@ const _platformLabels = {
   'career_pages': 'Career Pages',
   'referrals': 'Referrals',
 };
-
-enum _SyncStep { sources, dateRange }
-
-enum _DatePreset { last30Days, last3Months, last1Year }
 
 class SyncPrepareSheet extends StatefulWidget {
   const SyncPrepareSheet({
@@ -62,15 +60,12 @@ class SyncPrepareSheet extends StatefulWidget {
 }
 
 class _SyncPrepareSheetState extends State<SyncPrepareSheet> {
-  late _SyncStep _step;
   late final Set<String> _selectedIds;
-  _DatePreset _preset = _DatePreset.last30Days;
   bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
-    _step = widget.skipSourcesStep ? _SyncStep.dateRange : _SyncStep.sources;
     _selectedIds = widget.initialPlatformIds != null
         ? Set<String>.from(widget.initialPlatformIds!)
         : Set<String>.from(AppSyncState.instance.selectedPlatformIds);
@@ -78,16 +73,8 @@ class _SyncPrepareSheetState extends State<SyncPrepareSheet> {
 
   DateTime get _toDate => DateTime.now();
 
-  DateTime get _fromDate {
-    switch (_preset) {
-      case _DatePreset.last30Days:
-        return _toDate.subtract(const Duration(days: 30));
-      case _DatePreset.last3Months:
-        return _toDate.subtract(const Duration(days: 90));
-      case _DatePreset.last1Year:
-        return _toDate.subtract(const Duration(days: 365));
-    }
-  }
+  DateTime get _fromDate =>
+      _toDate.subtract(const Duration(days: mvpSyncRangeDays));
 
   String get _dateRangeLabel =>
       '${_formatDate(_fromDate)} → ${_formatDate(_toDate)}';
@@ -100,23 +87,19 @@ class _SyncPrepareSheetState extends State<SyncPrepareSheet> {
     return '${months[date.month - 1]} ${date.day}, ${date.year}';
   }
 
-  void _goToDateRange() {
+  Future<void> _startSync() async {
     if (_selectedIds.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Select at least one job source')),
       );
       return;
     }
-    setState(() => _step = _SyncStep.dateRange);
-  }
 
-  Future<void> _startSync() async {
     setState(() => _isSaving = true);
     try {
       await UserApi.instance.markImportHistorySync();
       await AppSyncState.instance.saveJobSources(_selectedIds);
       if (mounted) Navigator.of(context).pop();
-      // Start sync immediately so the dashboard shows the syncing state.
       await AppSyncState.instance.runSync(
         fromDate: _fromDate,
         toDate: _toDate,
@@ -135,8 +118,6 @@ class _SyncPrepareSheetState extends State<SyncPrepareSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final stepIndex = _step == _SyncStep.sources ? 1 : 2;
-
     return SizedBox(
       height: MediaQuery.sizeOf(context).height * 0.78,
       child: Padding(
@@ -151,18 +132,93 @@ class _SyncPrepareSheetState extends State<SyncPrepareSheet> {
           children: [
             _buildHandle(),
             const SizedBox(height: 16),
-            _buildStepIndicator(stepIndex),
-            const SizedBox(height: 20),
             Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 220),
-                child: _step == _SyncStep.sources
-                    ? _buildSourcesStep(key: const ValueKey('sources'))
-                    : _buildDateRangeStep(key: const ValueKey('dateRange')),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (!widget.skipSourcesStep) ...[
+                      Text(
+                        'Select job sources',
+                        style: AppTextStyles.darkGreeting.copyWith(fontSize: 20),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'We only scan emails related to the platforms you choose.',
+                        style: AppTextStyles.darkSubtitle.copyWith(height: 1.4),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${_selectedIds.length} selected',
+                        style: AppTextStyles.darkStatCaption.copyWith(
+                          color: AppColors.secondary,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          mainAxisSpacing: 10,
+                          crossAxisSpacing: 10,
+                          childAspectRatio: 1.05,
+                        ),
+                        itemCount: JobPlatform.all.length,
+                        itemBuilder: (context, index) {
+                          final platform = JobPlatform.all[index];
+                          return PlatformCard(
+                            platform: platform,
+                            isSelected: _selectedIds.contains(platform.id),
+                            onTap: () {
+                              setState(() {
+                                if (_selectedIds.contains(platform.id)) {
+                                  _selectedIds.remove(platform.id);
+                                } else {
+                                  _selectedIds.add(platform.id);
+                                }
+                              });
+                            },
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                    ] else ...[
+                      Text(
+                        'Ready to sync',
+                        style: AppTextStyles.darkGreeting.copyWith(fontSize: 20),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'We\'ll scan your selected sources for job-related '
+                        'emails from the last $mvpSyncRangeDays days.',
+                        style: AppTextStyles.darkSubtitle.copyWith(height: 1.4),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    _buildMvpRangeCard(),
+                    const SizedBox(height: 10),
+                    _buildMvpNotice(),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 16),
-            _buildFooter(),
+            FilledButton(
+              onPressed: _isSaving ? null : _startSync,
+              style: _primaryButtonStyle,
+              child: _isSaving
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.white,
+                      ),
+                    )
+                  : const Text('Start Sync'),
+            ),
           ],
         ),
       ),
@@ -182,274 +238,82 @@ class _SyncPrepareSheetState extends State<SyncPrepareSheet> {
     );
   }
 
-  Widget _buildStepIndicator(int step) {
-    return Row(
-      children: [
-        _stepDot(active: step >= 1, label: '1'),
-        Expanded(child: _stepLine(active: step >= 2)),
-        _stepDot(active: step >= 2, label: '2'),
-      ],
-    );
-  }
-
-  Widget _stepDot({required bool active, required String label}) {
+  Widget _buildMvpRangeCard() {
     return Container(
-      width: 28,
-      height: 28,
-      alignment: Alignment.center,
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: active ? AppColors.primary : AppColors.loginDivider,
-        shape: BoxShape.circle,
+        color: AppColors.secondary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.secondary.withValues(alpha: 0.25)),
       ),
-      child: Text(
-        label,
-        style: AppTextStyles.continueButton.copyWith(
-          fontSize: 12,
-          color: active ? AppColors.white : AppColors.dashboardMuted,
-        ),
-      ),
-    );
-  }
-
-  Widget _stepLine({required bool active}) {
-    return Container(
-      height: 2,
-      margin: const EdgeInsets.symmetric(horizontal: 8),
-      color: active ? AppColors.secondary : AppColors.loginDivider,
-    );
-  }
-
-  Widget _buildSourcesStep({required Key key}) {
-    return Column(
-      key: key,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          'Select job sources',
-          style: AppTextStyles.darkGreeting.copyWith(fontSize: 20),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'We only scan emails related to the platforms you choose.',
-          style: AppTextStyles.darkSubtitle.copyWith(height: 1.4),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          '${_selectedIds.length} selected',
-          style: AppTextStyles.darkStatCaption.copyWith(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.schedule_outlined,
+            size: 20,
             color: AppColors.secondary,
           ),
-        ),
-        const SizedBox(height: 14),
-        Expanded(
-          child: GridView.builder(
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              mainAxisSpacing: 10,
-              crossAxisSpacing: 10,
-              childAspectRatio: 1.05,
-            ),
-            itemCount: JobPlatform.all.length,
-            itemBuilder: (context, index) {
-              final platform = JobPlatform.all[index];
-              return PlatformCard(
-                platform: platform,
-                isSelected: _selectedIds.contains(platform.id),
-                onTap: () {
-                  setState(() {
-                    if (_selectedIds.contains(platform.id)) {
-                      _selectedIds.remove(platform.id);
-                    } else {
-                      _selectedIds.add(platform.id);
-                    }
-                  });
-                },
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDateRangeStep({required Key key}) {
-    return Column(
-      key: key,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          'Choose scan range',
-          style: AppTextStyles.darkGreeting.copyWith(fontSize: 20),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'How far back should we look for job-related emails?',
-          style: AppTextStyles.darkSubtitle.copyWith(height: 1.4),
-        ),
-        const SizedBox(height: 24),
-        _dateOption(
-          title: 'Last 30 days',
-          subtitle: 'Quick scan of recent activity',
-          preset: _DatePreset.last30Days,
-          icon: Icons.calendar_today_outlined,
-        ),
-        const SizedBox(height: 10),
-        _dateOption(
-          title: 'Last 3 months',
-          subtitle: 'Good for an active job search',
-          preset: _DatePreset.last3Months,
-          icon: Icons.date_range_outlined,
-        ),
-        const SizedBox(height: 10),
-        _dateOption(
-          title: 'Last 1 year',
-          subtitle: 'Maximum allowed scan window',
-          preset: _DatePreset.last1Year,
-          icon: Icons.history_rounded,
-        ),
-        const Spacer(),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: AppColors.onboardingIconLavender,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.platformsCardBorder),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Scanning period',
-                style: AppTextStyles.darkStatCaption,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                _dateRangeLabel,
-                style: AppTextStyles.featureTitle.copyWith(fontSize: 15),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                '${_selectedIds.length} source${_selectedIds.length == 1 ? '' : 's'}: '
-                '${_selectedIds.map((id) => _platformLabels[id] ?? id).join(', ')}',
-                style: AppTextStyles.darkStatCaption.copyWith(height: 1.35),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _dateOption({
-    required String title,
-    required String subtitle,
-    required _DatePreset preset,
-    required IconData icon,
-  }) {
-    final selected = _preset == preset;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => setState(() => _preset = preset),
-        borderRadius: BorderRadius.circular(14),
-        child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-          decoration: BoxDecoration(
-            color: selected
-                ? AppColors.secondary.withValues(alpha: 0.08)
-                : AppColors.white,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: selected ? AppColors.secondary : AppColors.platformsCardBorder,
-              width: selected ? 1.5 : 1,
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Last $mvpSyncRangeDays days only (MVP)',
+                  style: AppTextStyles.featureTitle.copyWith(fontSize: 14),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _dateRangeLabel,
+                  style: AppTextStyles.darkStatCaption,
+                ),
+                if (_selectedIds.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    '${_selectedIds.length} source${_selectedIds.length == 1 ? '' : 's'}: '
+                    '${_selectedIds.map((id) => _platformLabels[id] ?? id).join(', ')}',
+                    style: AppTextStyles.darkStatCaption.copyWith(height: 1.35),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
             ),
           ),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: selected
-                      ? AppColors.secondary.withValues(alpha: 0.15)
-                      : AppColors.onboardingIconLavender,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  icon,
-                  size: 20,
-                  color: selected ? AppColors.secondary : AppColors.primary,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: AppTextStyles.featureTitle.copyWith(fontSize: 14)),
-                    const SizedBox(height: 2),
-                    Text(subtitle, style: AppTextStyles.darkStatCaption),
-                  ],
-                ),
-              ),
-              Icon(
-                selected ? Icons.check_circle_rounded : Icons.circle_outlined,
-                color: selected ? AppColors.secondary : AppColors.dashboardMuted,
-                size: 22,
-              ),
-            ],
-          ),
-        ),
+        ],
       ),
     );
   }
 
-  Widget _buildFooter() {
-    if (_step == _SyncStep.sources) {
-      return FilledButton(
-        onPressed: _goToDateRange,
-        style: _primaryButtonStyle,
-        child: const Text('Continue'),
-      );
-    }
-
-    return Row(
-      children: [
-        Expanded(
-          child: OutlinedButton(
-            onPressed: _isSaving ? null : () => setState(() => _step = _SyncStep.sources),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size.fromHeight(48),
-              side: const BorderSide(color: AppColors.platformsCardBorder),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
+  Widget _buildMvpNotice() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.onboardingIconLavender,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.platformsCardBorder),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.info_outline_rounded,
+            size: 16,
+            color: AppColors.dashboardMuted.withValues(alpha: 0.9),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Longer scan windows are disabled for now to keep sync fast and '
+              'reduce AI usage. Use "Sync new emails" after your first sync '
+              'for ongoing updates.',
+              style: AppTextStyles.darkStatCaption.copyWith(height: 1.4),
             ),
-            child: const Text('Back'),
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          flex: 2,
-          child: FilledButton(
-            onPressed: _isSaving ? null : _startSync,
-            style: _primaryButtonStyle,
-            child: _isSaving
-                ? const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: AppColors.white,
-                    ),
-                  )
-                : const Text('Start Sync'),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 

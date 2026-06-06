@@ -54,7 +54,7 @@ class AppSyncState extends ChangeNotifier {
   bool autoSyncEnabled = true;
   SyncFrequency syncFrequency = SyncFrequency.every30Minutes;
   String? initialSyncMode;
-  String scanRange = 'Last 1 Year';
+  String scanRange = 'Last 10 days';
 
   UserSyncState sync = const UserSyncState();
   int feedRevision = 0;

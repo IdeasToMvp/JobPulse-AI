@@ -25,8 +25,8 @@ function NoResultsCard() {
         <Info className="mt-0.5 h-5 w-5 shrink-0 text-secondary" />
         <p className="text-sm leading-relaxed text-muted-foreground">
           Sync completed. No job-related emails were found for your selected
-          sources in this date range. Run sync again with a wider range or
-          different sources to find applications.
+          sources in the last 10 days. Try different sources or use Sync new
+          emails after more mail arrives.
         </p>
       </div>
     </Card>

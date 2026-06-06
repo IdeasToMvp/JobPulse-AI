@@ -13,7 +13,8 @@ export const PLATFORM_INCLUDES: Record<JobPlatformId, string[]> = {
   referrals: ['referral', 'referred you', 'employee referral'],
 };
 
-export const MAX_SYNC_RANGE_DAYS = 365;
+/** MVP cap — limits history sync window to reduce Gmail + AI volume. */
+export const MAX_SYNC_RANGE_DAYS = 10;
 export const GMAIL_OVERLAP_DAYS = 1;
 
 export function buildGmailQuery(

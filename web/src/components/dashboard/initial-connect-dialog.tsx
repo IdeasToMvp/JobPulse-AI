@@ -31,7 +31,7 @@ export function InitialConnectDialog({
   onClose,
   onImportHistory,
 }: InitialConnectDialogProps) {
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, updateUserProfile } = useAuth();
   const [step, setStep] = useState<Step>("mode");
   const [mode, setMode] = useState<ConnectMode | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
@@ -67,7 +67,8 @@ export function InitialConnectDialog({
       const platformIds = [...selectedIds];
 
       if (mode === "trackNew") {
-        await setupNewOnlySync(platformIds);
+        const profile = await setupNewOnlySync(platformIds);
+        updateUserProfile(profile);
         await refreshUser();
         handleClose();
         return;
@@ -109,7 +110,7 @@ export function InitialConnectDialog({
               />
               <ModeOption
                 title="Import existing job history"
-                subtitle="Scan past emails from LinkedIn, Indeed, and your other sources."
+                subtitle="Scan the last 10 days from LinkedIn, Indeed, and your other sources."
                 icon={History}
                 selected={mode === "importHistory"}
                 onSelect={() => setMode("importHistory")}
@@ -174,7 +175,7 @@ export function InitialConnectDialog({
                 ) : mode === "trackNew" ? (
                   "Start tracking"
                 ) : (
-                  "Choose scan range"
+                  "Start sync"
                 )}
               </Button>
             </div>

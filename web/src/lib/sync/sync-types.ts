@@ -34,27 +34,13 @@ export interface RunSyncOptions {
   incrementalOnly?: boolean;
 }
 
-export type DateRangePreset = "last30Days" | "last3Months" | "last1Year";
+/** MVP cap — history sync scans at most this many days to limit AI usage. */
+export const MVP_SYNC_RANGE_DAYS = 10;
 
-export function getDateRangeFromPreset(preset: DateRangePreset): {
-  fromDate: Date;
-  toDate: Date;
-} {
+export function getMvpSyncDateRange(): { fromDate: Date; toDate: Date } {
   const toDate = new Date();
   const fromDate = new Date(toDate);
-
-  switch (preset) {
-    case "last30Days":
-      fromDate.setDate(fromDate.getDate() - 30);
-      break;
-    case "last3Months":
-      fromDate.setDate(fromDate.getDate() - 90);
-      break;
-    case "last1Year":
-      fromDate.setDate(fromDate.getDate() - 365);
-      break;
-  }
-
+  fromDate.setDate(fromDate.getDate() - MVP_SYNC_RANGE_DAYS);
   return { fromDate, toDate };
 }
 

@@ -62,7 +62,7 @@ describe('platform-filters', () => {
     ).toBe(false);
   });
 
-  it('rejects ranges older than one year', () => {
+  it('rejects ranges older than the MVP window', () => {
     expect(() =>
       resolveSyncDateRange({
         fromDate: '2020-01-01',
@@ -71,11 +71,11 @@ describe('platform-filters', () => {
     ).toThrow();
   });
 
-  it('defaults to one year window', () => {
+  it('defaults to the MVP sync window', () => {
     const { fromDate, toDate } = resolveSyncDateRange();
     const span = Math.floor(
       (toDate.getTime() - fromDate.getTime()) / 86_400_000,
     );
-    expect(span).toBeLessThanOrEqual(365);
+    expect(span).toBeLessThanOrEqual(10);
   });
 });

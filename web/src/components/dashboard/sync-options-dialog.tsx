@@ -53,7 +53,7 @@ export function SyncOptionsDialog({
           <OptionTile
             icon={History}
             title="Rescan email history"
-            subtitle="Choose a date range and scan past job emails"
+            subtitle="Rescan the last 10 days of job emails"
             onClick={() => {
               onClose();
               onRescanHistory();

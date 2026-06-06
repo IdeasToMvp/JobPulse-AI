@@ -292,8 +292,8 @@ class _DashboardContent extends StatelessWidget {
           Expanded(
             child: Text(
               'Sync completed. No job-related emails were found for your '
-              'selected sources in this date range. Run sync again with a '
-              'wider range or different sources to find applications.',
+              'selected sources in the last 10 days. Try different sources or '
+              'use Sync new emails after more mail arrives.',
               style: AppTextStyles.darkSubtitle.copyWith(height: 1.4),
             ),
           ),

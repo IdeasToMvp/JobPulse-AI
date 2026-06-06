@@ -16,7 +16,7 @@ import {
   logout as logoutApi,
 } from "@/lib/api/auth";
 import { tokenStorage } from "@/lib/auth/token-storage";
-import type { UserProfile } from "@/lib/types/user";
+import type { UserProfile, UserSyncState } from "@/lib/types/user";
 
 interface AuthContextValue {
   user: UserProfile | null;
@@ -26,6 +26,8 @@ interface AuthContextValue {
   completeSignIn: (token: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  updateUserProfile: (profile: UserProfile) => void;
+  mergeUserSync: (sync: UserSyncState) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -43,6 +45,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const profile = await fetchCurrentUser(token);
     setUser(profile);
+  }, []);
+
+  const updateUserProfile = useCallback((profile: UserProfile) => {
+    setUser(profile);
+  }, []);
+
+  const mergeUserSync = useCallback((sync: UserSyncState) => {
+    setUser((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        sync: {
+          ...current.sync,
+          ...sync,
+          byPlatform: sync.byPlatform ?? current.sync.byPlatform,
+        },
+      };
+    });
   }, []);
 
   useEffect(() => {
@@ -98,6 +118,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       completeSignIn,
       signOut,
       refreshUser,
+      updateUserProfile,
+      mergeUserSync,
     }),
     [
       user,
@@ -106,6 +128,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       completeSignIn,
       signOut,
       refreshUser,
+      updateUserProfile,
+      mergeUserSync,
     ],
   );
 

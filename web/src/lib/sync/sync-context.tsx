@@ -46,7 +46,7 @@ interface SyncContextValue {
 const SyncContext = createContext<SyncContextValue | null>(null);
 
 export function SyncProvider({ children }: { children: ReactNode }) {
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, mergeUserSync } = useAuth();
   const [syncButtonState, setSyncButtonState] =
     useState<SyncButtonState>("idle");
   const [syncStep, setSyncStep] = useState<SyncStep>("idle");
@@ -120,7 +120,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         }
 
         setStep("finalizing", "Computing stats and updates");
-        await finalizeSync({
+        const syncResult = await finalizeSync({
           fromDate: platformResult.fromDate,
           toDate: platformResult.toDate,
           maxInternalDate: platformResult.maxInternalDate,
@@ -133,9 +133,15 @@ export function SyncProvider({ children }: { children: ReactNode }) {
           companiesScanned: companyResult.companiesScanned,
         });
 
+        mergeUserSync(syncResult);
         setStep("complete");
         setSyncButtonState("success");
-        await refreshUser();
+
+        try {
+          await refreshUser();
+        } catch {
+          // finalize already persisted; merged sync keeps dashboard in synced state
+        }
 
         await new Promise((resolve) => setTimeout(resolve, 600));
         resetSyncUi();
@@ -144,7 +150,27 @@ export function SyncProvider({ children }: { children: ReactNode }) {
           setSyncButtonState("syncing");
           setStep("finalizing", "Saving progress…");
           try {
-            await finalizeSyncStats();
+            const syncResult = await finalizeSyncStats();
+            mergeUserSync(syncResult);
+            await refreshUser();
+          } catch {
+            try {
+              await refreshUser();
+            } catch {
+              // ignore
+            }
+          }
+          resetSyncUi();
+          return;
+        }
+
+        const wasInitialSync = !user?.sync.hasSynced;
+        if (wasInitialSync) {
+          setSyncButtonState("syncing");
+          setStep("finalizing", "Saving progress…");
+          try {
+            const syncResult = await finalizeSyncStats();
+            mergeUserSync(syncResult);
             await refreshUser();
           } catch {
             try {
@@ -163,7 +189,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         endSyncSession();
       }
     },
-    [refreshUser, resetSyncUi, setStep, syncButtonState],
+    [mergeUserSync, refreshUser, resetSyncUi, setStep, syncButtonState, user?.sync.hasSynced],
   );
 
   const runIncrementalSync = useCallback(async () => {
@@ -196,7 +222,8 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       syncButtonState,
       syncStep,
       syncStepDetail,
-      isSyncing: syncButtonState === "syncing",
+      isSyncing:
+        syncButtonState === "syncing" || syncButtonState === "success",
       canRunIncrementalSync,
       runSync,
       runIncrementalSync,
