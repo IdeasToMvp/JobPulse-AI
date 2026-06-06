@@ -13,6 +13,9 @@ export interface AiExtractionResult {
   confidence: number;
 }
 
+const OPENAI_TIMEOUT_MS = 45_000;
+const OPENAI_MAX_ATTEMPTS = 3;
+
 @Injectable()
 export class AiClassifierService {
   private readonly logger = new Logger(AiClassifierService.name);
@@ -41,39 +44,8 @@ export class AiClassifierService {
     }
 
     try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: this.model,
-          temperature: 0,
-          response_format: { type: 'json_object' },
-          messages: [
-            {
-              role: 'system',
-              content:
-                'Extract job application details from email headers only (from + subject). Return JSON only: {"isApplyConfirmation":boolean,"company":"string","role":"string or null","salary":"string or null","location":"string or null","employmentType":"string or null","confidence":0.0-1.0}. isApplyConfirmation is true only for emails confirming the user submitted/applied to a job.',
-            },
-            {
-              role: 'user',
-              content: JSON.stringify({
-                from: input.from,
-                subject: input.subject,
-                platform: input.platformId,
-              }),
-            },
-          ],
-        }),
-      });
-
-      if (!response.ok) {
-        const body = await response.text();
-        this.logger.error(`OpenAI error ${response.status}: ${body}`);
-        return null;
-      }
+      const response = await this.requestOpenAi(input);
+      if (!response) return null;
 
       const payload = (await response.json()) as {
         choices?: { message?: { content?: string } }[];
@@ -102,9 +74,96 @@ export class AiClassifierService {
           typeof parsed.confidence === 'number' ? parsed.confidence : 0,
       };
     } catch (error) {
-      this.logger.error(`AI extraction failed: ${error}`);
+      this.logger.error(
+        `AI extraction failed: ${this.formatFetchError(error)}`,
+      );
       return null;
     }
+  }
+
+  private async requestOpenAi(input: {
+    from: string;
+    subject: string;
+    platformId: string;
+  }): Promise<Response | null> {
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= OPENAI_MAX_ATTEMPTS; attempt++) {
+      try {
+        const response = await fetch(
+          'https://api.openai.com/v1/chat/completions',
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${this.apiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: this.model,
+              temperature: 0,
+              response_format: { type: 'json_object' },
+              messages: [
+                {
+                  role: 'system',
+                  content:
+                    'Extract job application details from email headers only (from + subject). Return JSON only: {"isApplyConfirmation":boolean,"company":"string","role":"string or null","salary":"string or null","location":"string or null","employmentType":"string or null","confidence":0.0-1.0}. isApplyConfirmation is true only for emails confirming the user submitted/applied to a job.',
+                },
+                {
+                  role: 'user',
+                  content: JSON.stringify({
+                    from: input.from,
+                    subject: input.subject,
+                    platform: input.platformId,
+                  }),
+                },
+              ],
+            }),
+            signal: AbortSignal.timeout(OPENAI_TIMEOUT_MS),
+          },
+        );
+
+        if (!response.ok) {
+          const body = await response.text();
+          this.logger.error(
+            `OpenAI error ${response.status} (attempt ${attempt}/${OPENAI_MAX_ATTEMPTS}): ${body}`,
+          );
+          if (response.status >= 500 && attempt < OPENAI_MAX_ATTEMPTS) {
+            await this.delay(attempt * 1000);
+            continue;
+          }
+          return null;
+        }
+
+        return response;
+      } catch (error) {
+        lastError = error;
+        this.logger.warn(
+          `OpenAI request attempt ${attempt}/${OPENAI_MAX_ATTEMPTS} failed: ${this.formatFetchError(error)}`,
+        );
+        if (attempt < OPENAI_MAX_ATTEMPTS) {
+          await this.delay(attempt * 1000);
+        }
+      }
+    }
+
+    throw lastError;
+  }
+
+  private formatFetchError(error: unknown): string {
+    if (error instanceof Error) {
+      const cause =
+        error.cause instanceof Error
+          ? error.cause.message
+          : error.cause != null
+            ? String(error.cause)
+            : '';
+      return cause ? `${error.message} (${cause})` : error.message;
+    }
+    return String(error);
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   mergeExtractedDetails(

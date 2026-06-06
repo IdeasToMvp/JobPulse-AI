@@ -196,98 +196,103 @@ export class SyncService {
           maxInternalDate = meta.internalDate;
         }
 
-        const ruleResult = this.ruleEngine.detectApplyConfirmation(
-          meta.from,
-          meta.subject,
-        );
-        let company = ruleResult.company;
-        let role = ruleResult.role;
-        let isApply = ruleResult.isApply;
-        let extractedDetails: ApplicationExtractedDetails = {
-          company:
-            ruleResult.company !== 'Unknown Company'
-              ? ruleResult.company
-              : undefined,
-          role: ruleResult.role,
-          source: 'rule',
-        };
-        let source: 'rule' | 'ai' | 'mixed' = 'rule';
-        let applicationId: string | undefined;
-        let companyId: string | undefined;
-
-        const needsAi =
-          ruleResult.confidence === 'none' ||
-          ruleResult.confidence === 'low' ||
-          company === 'Unknown Company' ||
-          !role;
-
-        if (needsAi) {
-          this.cancellation.throwIfCancelled(userId);
-          const aiResult = await this.aiClassifier.extractApplicationDetails({
-            from: meta.from,
-            subject: meta.subject,
-            platformId,
-            ruleConfidence: ruleResult.confidence,
-            ruleIsApply: ruleResult.isApply,
-          });
-          if (aiResult) {
-            aiCalls += 1;
-            const merged = this.aiClassifier.mergeExtractedDetails(
-              ruleResult,
-              aiResult,
-            );
-            isApply = merged.isApply;
-            company = merged.company;
-            role = merged.role;
-            extractedDetails = merged.extractedDetails;
-            source = merged.source;
-          }
-        }
-
-        if (company && company !== 'Unknown Company') {
-          const discovered = await this.companyDiscovery.upsertFromPlatformEmail(
-            {
-              userId,
-              companyName: company,
-              platformId,
-              fromAddress: meta.from,
-              messageAt: meta.internalDate,
-            },
+        try {
+          const ruleResult = this.ruleEngine.detectApplyConfirmation(
+            meta.from,
+            meta.subject,
           );
-          companyId = discovered?.id;
-        }
+          let company = ruleResult.company;
+          let role = ruleResult.role;
+          let isApply = ruleResult.isApply;
+          let extractedDetails: ApplicationExtractedDetails = {
+            company:
+              ruleResult.company !== 'Unknown Company'
+                ? ruleResult.company
+                : undefined,
+            role: ruleResult.role,
+            source: 'rule',
+          };
+          let source: 'rule' | 'ai' | 'mixed' = 'rule';
+          let applicationId: string | undefined;
+          let companyId: string | undefined;
 
-        const classificationStatus: ApplicationStatus | 'unknown' = isApply
-          ? 'applied'
-          : 'unknown';
+          const needsAi =
+            ruleResult.confidence === 'none' ||
+            ruleResult.confidence === 'low' ||
+            company === 'Unknown Company' ||
+            !role;
 
-        if (isApply) {
-          applicationId = await this.applicationMatcher.matchAndUpsert({
+          if (needsAi) {
+            this.cancellation.throwIfCancelled(userId);
+            const aiResult = await this.aiClassifier.extractApplicationDetails({
+              from: meta.from,
+              subject: meta.subject,
+              platformId,
+              ruleConfidence: ruleResult.confidence,
+              ruleIsApply: ruleResult.isApply,
+            });
+            if (aiResult) {
+              aiCalls += 1;
+              const merged = this.aiClassifier.mergeExtractedDetails(
+                ruleResult,
+                aiResult,
+              );
+              isApply = merged.isApply;
+              company = merged.company;
+              role = merged.role;
+              extractedDetails = merged.extractedDetails;
+              source = merged.source;
+            }
+          }
+
+          if (company && company !== 'Unknown Company') {
+            const discovered =
+              await this.companyDiscovery.upsertFromPlatformEmail({
+                userId,
+                companyName: company,
+                platformId,
+                fromAddress: meta.from,
+                messageAt: meta.internalDate,
+              });
+            companyId = discovered?.id;
+          }
+
+          const classificationStatus: ApplicationStatus | 'unknown' = isApply
+            ? 'applied'
+            : 'unknown';
+
+          if (isApply) {
+            applicationId = await this.applicationMatcher.matchAndUpsert({
+              userId,
+              platformId,
+              threadId: meta.threadId,
+              messageId: meta.id,
+              messageAt: meta.internalDate,
+              companyName: company,
+              role,
+              companyId,
+              extractedDetails,
+            });
+          }
+
+          await this.applications.insertProcessedEmail({
             userId,
-            platformId,
-            threadId: meta.threadId,
             messageId: meta.id,
-            messageAt: meta.internalDate,
-            companyName: company,
-            role,
-            companyId,
-            extractedDetails,
+            threadId: meta.threadId,
+            platformId,
+            subject: meta.subject,
+            fromAddress: meta.from,
+            internalDate: meta.internalDate,
+            classificationStatus,
+            classificationSource: source === 'mixed' ? 'ai' : source,
+            applicationId,
+            syncPhase: 'platform',
           });
+        } catch (error) {
+          this.logger.error(
+            `Platform sync skipped message ${messageId} for user ${userId}: ${error instanceof Error ? error.message : error}`,
+          );
         }
-
-        await this.applications.insertProcessedEmail({
-          userId,
-          messageId: meta.id,
-          threadId: meta.threadId,
-          platformId,
-          subject: meta.subject,
-          fromAddress: meta.from,
-          internalDate: meta.internalDate,
-          classificationStatus,
-          classificationSource: source === 'mixed' ? 'ai' : source,
-          applicationId,
-          syncPhase: 'platform',
-        });
       }
     }
 
@@ -370,30 +375,36 @@ export class SyncService {
           companyMessageCount += 1;
           companyEmailsProcessed += 1;
 
-          const ruleResult = this.ruleEngine.detectApplyConfirmation(
-            meta.from,
-            meta.subject,
-          );
+          try {
+            const ruleResult = this.ruleEngine.detectApplyConfirmation(
+              meta.from,
+              meta.subject,
+            );
 
-          await this.companyDiscovery.learnRecruiterEmail({
-            userId,
-            companyId: company.id,
-            fromAddress: meta.from,
-            messageAt: meta.internalDate,
-          });
+            await this.companyDiscovery.learnRecruiterEmail({
+              userId,
+              companyId: company.id,
+              fromAddress: meta.from,
+              messageAt: meta.internalDate,
+            });
 
-          await this.applications.insertProcessedEmail({
-            userId,
-            messageId: meta.id,
-            threadId: meta.threadId,
-            platformId: 'company_direct',
-            subject: meta.subject,
-            fromAddress: meta.from,
-            internalDate: meta.internalDate,
-            classificationStatus: ruleResult.isApply ? 'applied' : 'unknown',
-            classificationSource: 'rule',
-            syncPhase: 'company',
-          });
+            await this.applications.insertProcessedEmail({
+              userId,
+              messageId: meta.id,
+              threadId: meta.threadId,
+              platformId: 'company_direct',
+              subject: meta.subject,
+              fromAddress: meta.from,
+              internalDate: meta.internalDate,
+              classificationStatus: ruleResult.isApply ? 'applied' : 'unknown',
+              classificationSource: 'rule',
+              syncPhase: 'company',
+            });
+          } catch (error) {
+            this.logger.error(
+              `Company sync skipped message ${messageId} for user ${userId}: ${error instanceof Error ? error.message : error}`,
+            );
+          }
         }
 
         if (companyMessageCount >= MAX_MESSAGES_PER_COMPANY) break;

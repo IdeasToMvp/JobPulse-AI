@@ -17,6 +17,8 @@ import {
   DiscoveredCompanyRecord,
 } from './company.entity';
 
+const UPSERT_MAX_ATTEMPTS = 3;
+
 @Injectable()
 export class CompanyDiscoveryService {
   private readonly logger = new Logger(CompanyDiscoveryService.name);
@@ -33,6 +35,27 @@ export class CompanyDiscoveryService {
     const key = normalizeCompanyKey(input.companyName);
     if (!key || key === 'unknowncompany') return null;
 
+    for (let attempt = 1; attempt <= UPSERT_MAX_ATTEMPTS; attempt++) {
+      const company = await this.upsertFromPlatformEmailOnce(input, key);
+      if (company) return company;
+    }
+
+    this.logger.warn(
+      `Could not upsert discovered company "${input.companyName}" for user ${input.userId} after ${UPSERT_MAX_ATTEMPTS} attempts`,
+    );
+    return null;
+  }
+
+  private async upsertFromPlatformEmailOnce(
+    input: {
+      userId: string;
+      companyName: string;
+      platformId: string;
+      fromAddress?: string;
+      messageAt: Date;
+    },
+    key: string,
+  ): Promise<DiscoveredCompanyRecord | null> {
     const now = input.messageAt.toISOString();
 
     const { data: existing, error: fetchError } = await this.supabase.db
@@ -60,9 +83,13 @@ export class CompanyDiscoveryService {
         .update(updates)
         .eq('id', existing.id)
         .select('*')
-        .single();
+        .maybeSingle();
 
       if (error) this.raise('upsertFromPlatformEmail.update', error);
+      if (!data) {
+        return null;
+      }
+
       company = this.mapCompany(data);
     } else {
       const { data, error } = await this.supabase.db
@@ -77,9 +104,19 @@ export class CompanyDiscoveryService {
           last_seen_at: now,
         })
         .select('*')
-        .single();
+        .maybeSingle();
 
-      if (error) this.raise('upsertFromPlatformEmail.insert', error);
+      if (error) {
+        if (this.isUniqueViolation(error)) {
+          return null;
+        }
+        this.raise('upsertFromPlatformEmail.insert', error);
+      }
+
+      if (!data) {
+        return null;
+      }
+
       company = this.mapCompany(data);
     }
 
@@ -298,6 +335,10 @@ export class CompanyDiscoveryService {
       firstSeenAt: new Date(row.first_seen_at as string),
       lastSeenAt: new Date(row.last_seen_at as string),
     };
+  }
+
+  private isUniqueViolation(error: { code?: string; message: string }): boolean {
+    return error.code === '23505';
   }
 
   private raise(operation: string, error: { message: string }): never {

@@ -258,7 +258,31 @@ export class ApplicationsService {
       .select('*')
       .single();
 
-    if (error) this.raise('insertProcessedEmail', error);
+    if (error) {
+      if (error.code === '23505') {
+        const { data: existing, error: fetchError } = await this.supabase.db
+          .from('processed_emails')
+          .select('*')
+          .eq('user_id', input.userId)
+          .eq('message_id', input.messageId)
+          .maybeSingle();
+
+        if (!fetchError && existing) {
+          return this.mapProcessedEmail(existing);
+        }
+      }
+
+      if (error.code === '23503') {
+        this.logger.error(
+          `insertProcessedEmail rejected: user ${input.userId} not found (message ${input.messageId})`,
+        );
+        throw new NotFoundException(
+          'User account not found. Please sign out and sign in again.',
+        );
+      }
+
+      this.raise('insertProcessedEmail', error);
+    }
     return this.mapProcessedEmail(data);
   }
 
