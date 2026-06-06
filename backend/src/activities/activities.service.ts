@@ -89,6 +89,33 @@ export class ActivitiesService {
     });
   }
 
+  async recordManualApplication(input: {
+    userId: string;
+    applicationId: string;
+    company: string;
+    role: string;
+    platformId: string;
+    status: ApplicationStatus;
+    occurredAt?: Date;
+  }): Promise<void> {
+    const platform = PLATFORM_LABELS[input.platformId] ?? input.platformId;
+    await this.insertEvent({
+      userId: input.userId,
+      type: 'user_action',
+      title: input.company,
+      description: `${input.role}\nAdded manually · ${formatStatusLabel(input.status)} · ${platform}`,
+      company: input.company,
+      role: input.role,
+      applicationId: input.applicationId,
+      occurredAt: input.occurredAt,
+      metadata: {
+        platformId: input.platformId,
+        status: input.status,
+        source: 'manual',
+      },
+    });
+  }
+
   async recordStatusUpdate(input: {
     userId: string;
     applicationId: string;

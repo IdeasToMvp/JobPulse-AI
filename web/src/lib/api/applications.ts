@@ -3,6 +3,8 @@ import type {
   Application,
   ApplicationDetail,
   ApplicationUserDetails,
+  CreateManualApplicationInput,
+  CreateManualApplicationResult,
   ManualApplicationStatus,
   UpdateApplicationDetailsResult,
   UpdateApplicationStatusResult,
@@ -10,6 +12,15 @@ import type {
 
 export async function fetchApplications(): Promise<Application[]> {
   return apiRequest<Application[]>("/applications");
+}
+
+export async function createManualApplication(
+  input: CreateManualApplicationInput,
+): Promise<CreateManualApplicationResult> {
+  return apiRequest<CreateManualApplicationResult>("/applications", {
+    method: "POST",
+    body: input,
+  });
 }
 
 export async function fetchApplication(id: string): Promise<ApplicationDetail> {

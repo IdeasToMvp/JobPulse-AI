@@ -43,6 +43,7 @@ export interface Application {
   appliedAt: string;
   lastMessageAt?: string;
   updatedAt: string;
+  isManual?: boolean;
   extractedDetails?: ApplicationExtractedDetails;
   userDetails?: ApplicationUserDetails;
   companyApplyCount?: number;
@@ -74,6 +75,20 @@ export interface UpdateApplicationStatusResult {
 
 export interface UpdateApplicationDetailsResult {
   application: ApplicationDetail;
+}
+
+export interface CreateManualApplicationInput {
+  company: string;
+  role: string;
+  platformId: string;
+  status: ManualApplicationStatus;
+  appliedAt: string;
+  details?: ApplicationUserDetails;
+}
+
+export interface CreateManualApplicationResult {
+  application: ApplicationDetail;
+  sync: UpdateApplicationStatusResult["sync"];
 }
 
 export type StatusFilterId =

@@ -18,10 +18,6 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "JobPulseAI",
   description: "Sync your job applications and career trajectory from Gmail.",
-  icons: {
-    icon: "/app-icon.png",
-    apple: "/app-icon.png",
-  },
 };
 
 export const viewport: Viewport = {

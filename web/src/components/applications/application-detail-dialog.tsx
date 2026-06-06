@@ -6,7 +6,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { ApplicationStatusBadge } from "@/components/applications/application-status-badge";
 import { Button } from "@/components/ui/button";
 import { fetchApplication } from "@/lib/api/applications";
-import { formatStatusLabel } from "@/lib/constants/application-status";
+import { formatStatusLabel, MANUAL_APPLICATION_ACCENT } from "@/lib/constants/application-status";
 import { getPlatformLabel } from "@/lib/constants/platform-labels";
 import type { Application, ApplicationDetail } from "@/lib/types/application";
 import {
@@ -76,9 +76,22 @@ function ApplicationDetailContent({
               {data.role}
             </p>
           ) : null}
-          <p className="mt-1 text-sm text-muted-foreground">
-            {getPlatformLabel(data.platformId)}
-          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <p className="text-sm text-muted-foreground">
+              {getPlatformLabel(data.platformId)}
+            </p>
+            {data.isManual ? (
+              <span
+                className="inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                style={{
+                  backgroundColor: `${MANUAL_APPLICATION_ACCENT}26`,
+                  color: MANUAL_APPLICATION_ACCENT,
+                }}
+              >
+                Manual entry
+              </span>
+            ) : null}
+          </div>
         </div>
         <ApplicationStatusBadge status={data.status} className="self-start" />
       </div>

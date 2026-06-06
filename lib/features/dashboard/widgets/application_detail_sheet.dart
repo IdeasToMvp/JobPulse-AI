@@ -184,8 +184,10 @@ class _ApplicationDetailSheetState extends State<ApplicationDetailSheet> {
             const SizedBox(height: 20),
             _detailRow(
               'Source',
-              _platformLabels[_application.platformId] ??
-                  _application.platformId,
+              _application.isManual
+                  ? '${_platformLabels[_application.platformId] ?? _application.platformId} · Manual entry'
+                  : _platformLabels[_application.platformId] ??
+                      _application.platformId,
             ),
             const SizedBox(height: 10),
             _detailRow('Applied', _formatDate(_application.appliedAt)),

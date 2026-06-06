@@ -6,6 +6,7 @@ import '../../../core/auth/auth_service.dart';
 import '../../../core/models/application.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
+import 'add_application_sheet.dart';
 import 'application_detail_sheet.dart';
 import 'application_list_card.dart';
 import 'update_status_sheet.dart';
@@ -74,6 +75,19 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
     });
   }
 
+  void _onApplicationCreated(ApplicationDetail detail) {
+    setState(() {
+      _applications = [detail, ..._applications];
+    });
+  }
+
+  void _openAddApplication() {
+    AddApplicationSheet.show(
+      context,
+      onCreated: _onApplicationCreated,
+    );
+  }
+
   void _openStatusUpdate(JobApplication app) {
     UpdateStatusSheet.show(
       context,
@@ -116,14 +130,6 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
   }
 
   Future<void> _load() async {
-    if (!AppSyncState.instance.hasSyncedData) {
-      setState(() {
-        _loading = false;
-        _applications = [];
-      });
-      return;
-    }
-
     setState(() {
       _loading = true;
       _error = null;
@@ -157,12 +163,6 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
     return ListenableBuilder(
       listenable: AppSyncState.instance,
       builder: (context, child) {
-        if (!AppSyncState.instance.hasSyncedData) {
-          return _emptyState(
-            'Sync Gmail to start tracking your job applications.',
-          );
-        }
-
         if (_loading) {
           return const ColoredBox(
             color: AppColors.dashboardBackground,
@@ -189,11 +189,27 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Applications',
-                            style: AppTextStyles.darkGreeting.copyWith(
-                              fontSize: 22,
-                            ),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Applications',
+                                  style: AppTextStyles.darkGreeting.copyWith(
+                                    fontSize: 22,
+                                  ),
+                                ),
+                              ),
+                              FilledButton.icon(
+                                onPressed: _openAddApplication,
+                                icon: const Icon(Icons.add_rounded, size: 18),
+                                label: const Text('Add'),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: AppColors.primary,
+                                  foregroundColor: AppColors.white,
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 12),
                           SingleChildScrollView(
@@ -238,10 +254,22 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
                             Text(
                               countsAheadOfList
                                   ? 'Sync was stopped before the list finished loading. Pull down to refresh applications found so far.'
-                                  : 'No applications found for your selected sources.',
+                                  : 'No applications yet. Add one manually or connect Gmail to sync from email.',
                               textAlign: TextAlign.center,
                               style: AppTextStyles.darkSubtitle,
                             ),
+                            if (!countsAheadOfList) ...[
+                              const SizedBox(height: 20),
+                              FilledButton.icon(
+                                onPressed: _openAddApplication,
+                                icon: const Icon(Icons.add_rounded, size: 18),
+                                label: const Text('Add application'),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: AppColors.primary,
+                                  foregroundColor: AppColors.white,
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -267,11 +295,27 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Applications',
-                          style: AppTextStyles.darkGreeting.copyWith(
-                            fontSize: 22,
-                          ),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Applications',
+                                style: AppTextStyles.darkGreeting.copyWith(
+                                  fontSize: 22,
+                                ),
+                              ),
+                            ),
+                            FilledButton.icon(
+                              onPressed: _openAddApplication,
+                              icon: const Icon(Icons.add_rounded, size: 18),
+                              label: const Text('Add'),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                foregroundColor: AppColors.white,
+                                visualDensity: VisualDensity.compact,
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 12),
                         SingleChildScrollView(

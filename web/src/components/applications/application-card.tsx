@@ -1,5 +1,5 @@
 import { getPlatformLabel } from "@/lib/constants/platform-labels";
-import { getStatusCardStyles } from "@/lib/constants/application-status";
+import { getApplicationCardStyles, MANUAL_APPLICATION_ACCENT } from "@/lib/constants/application-status";
 import type { Application } from "@/lib/types/application";
 import {
   displayLocation,
@@ -24,7 +24,7 @@ export function ApplicationCard({
 }: ApplicationCardProps) {
   const salary = displaySalary(application);
   const location = displayLocation(application);
-  const cardStyles = getStatusCardStyles(application.status);
+  const cardStyles = getApplicationCardStyles(application);
 
   return (
     <div
@@ -90,9 +90,22 @@ export function ApplicationCard({
           ) : null}
 
           <div className="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
-            <p className="text-xs text-muted-foreground">
-              {getPlatformLabel(application.platformId)}
-            </p>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <p className="text-xs text-muted-foreground">
+                {getPlatformLabel(application.platformId)}
+              </p>
+              {application.isManual ? (
+                <span
+                  className="inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                  style={{
+                    backgroundColor: `${MANUAL_APPLICATION_ACCENT}26`,
+                    color: MANUAL_APPLICATION_ACCENT,
+                  }}
+                >
+                  Manual
+                </span>
+              ) : null}
+            </div>
 
             <div className="space-y-0.5 text-xs text-muted-foreground sm:text-right">
               <p>Applied {formatApplicationDate(application.appliedAt)}</p>

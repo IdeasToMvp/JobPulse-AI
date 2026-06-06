@@ -1,9 +1,10 @@
 "use client";
 
-import { Briefcase, Loader2 } from "lucide-react";
+import { Briefcase, Loader2, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { ActiveDetailsDialog } from "@/components/applications/active-details-dialog";
+import { AddApplicationDialog } from "@/components/applications/add-application-dialog";
 import { ApplicationCard } from "@/components/applications/application-card";
 import { ApplicationDetailDialog } from "@/components/applications/application-detail-dialog";
 import { ApplicationStatusFilters } from "@/components/applications/application-status-filters";
@@ -17,32 +18,32 @@ import { fetchApplications } from "@/lib/api/applications";
 import { useAuth } from "@/lib/auth/auth-context";
 import { STATUS_FILTERS } from "@/lib/constants/application-status";
 import type { Application, ApplicationDetail, StatusFilterId } from "@/lib/types/application";
-import type { UserProfile } from "@/lib/types/user";
+import type { UserProfile, UserSyncState } from "@/lib/types/user";
 import { filterApplications } from "@/lib/utils/application";
-import { formatLastSync, hasUsableSyncData } from "@/lib/utils/dashboard";
+import { formatLastSync } from "@/lib/utils/dashboard";
 
 export function ApplicationsView() {
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, mergeUserSync } = useAuth();
 
   if (!user) return null;
 
-  if (!hasUsableSyncData(user.sync)) {
-    return (
-      <EmptyState message="Sync Gmail to start tracking your job applications." />
-    );
-  }
-
   return (
-    <SyncedApplicationsContent user={user} refreshUser={refreshUser} />
+    <SyncedApplicationsContent
+      user={user}
+      refreshUser={refreshUser}
+      mergeUserSync={mergeUserSync}
+    />
   );
 }
 
 function SyncedApplicationsContent({
   user,
   refreshUser,
+  mergeUserSync,
 }: {
   user: UserProfile;
   refreshUser: () => Promise<void>;
+  mergeUserSync: (sync: UserSyncState) => void;
 }) {
   const [applications, setApplications] = useState<Application[]>([]);
   const [statusFilter, setStatusFilter] = useState<StatusFilterId>("applied");
@@ -62,6 +63,7 @@ function SyncedApplicationsContent({
   const [detailRefreshKey, setDetailRefreshKey] = useState(0);
   const [syncOptionsOpen, setSyncOptionsOpen] = useState(false);
   const [syncPrepareOpen, setSyncPrepareOpen] = useState(false);
+  const [addApplicationOpen, setAddApplicationOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -93,6 +95,15 @@ function SyncedApplicationsContent({
       .then(setApplications)
       .catch(() => setError("Failed to load applications"))
       .finally(() => setIsLoading(false));
+  }
+
+  function handleApplicationCreated(
+    created: ApplicationDetail,
+    sync: UserSyncState,
+  ) {
+    setApplications((current) => [created, ...current]);
+    mergeUserSync(sync);
+    void refreshUser();
   }
 
   function handleApplicationUpdated(updated: ApplicationDetail) {
@@ -172,6 +183,12 @@ function SyncedApplicationsContent({
         open={syncPrepareOpen}
         onClose={() => setSyncPrepareOpen(false)}
       />
+
+      <AddApplicationDialog
+        open={addApplicationOpen}
+        onClose={() => setAddApplicationOpen(false)}
+        onCreated={handleApplicationCreated}
+      />
     </>
   );
 
@@ -184,6 +201,7 @@ function SyncedApplicationsContent({
           onFilterChange={setStatusFilter}
           applicationsCount={0}
           onSyncClick={() => setSyncOptionsOpen(true)}
+          onAddClick={() => setAddApplicationOpen(true)}
         >
           <div className="flex min-h-[12rem] items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -218,21 +236,29 @@ function SyncedApplicationsContent({
           onFilterChange={setStatusFilter}
           applicationsCount={0}
           onSyncClick={() => setSyncOptionsOpen(true)}
+          onAddClick={() => setAddApplicationOpen(true)}
         >
           <Card padding="md" className="text-center">
             <p className="text-sm text-muted-foreground">
               {countsAheadOfList
                 ? "Sync was stopped before the list finished loading. Tap refresh to load applications found so far."
-                : "No applications found for your selected sources."}
+                : "No applications yet. Add one manually or sync Gmail to import from your inbox."}
             </p>
-            {countsAheadOfList ? (
-              <Button
-                className="mt-4 min-h-11"
-                onClick={reloadApplications}
-              >
-                Refresh list
-              </Button>
-            ) : null}
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-center">
+              {!countsAheadOfList ? (
+                <Button
+                  className="min-h-11"
+                  onClick={() => setAddApplicationOpen(true)}
+                >
+                  Add application
+                </Button>
+              ) : null}
+              {countsAheadOfList ? (
+                <Button className="min-h-11" onClick={reloadApplications}>
+                  Refresh list
+                </Button>
+              ) : null}
+            </div>
           </Card>
         </ApplicationsPageShell>
         {dialogs}
@@ -248,6 +274,7 @@ function SyncedApplicationsContent({
         onFilterChange={setStatusFilter}
         applicationsCount={applications.length}
         onSyncClick={() => setSyncOptionsOpen(true)}
+        onAddClick={() => setAddApplicationOpen(true)}
       >
         {filtered.length === 0 ? (
           <Card padding="md" className="text-center">
@@ -280,6 +307,7 @@ function ApplicationsPageShell({
   onFilterChange,
   applicationsCount,
   onSyncClick,
+  onAddClick,
   children,
 }: {
   user: UserProfile;
@@ -287,6 +315,7 @@ function ApplicationsPageShell({
   onFilterChange: (filter: StatusFilterId) => void;
   applicationsCount: number;
   onSyncClick: () => void;
+  onAddClick: () => void;
   children: React.ReactNode;
 }) {
   return (
@@ -302,8 +331,19 @@ function ApplicationsPageShell({
             </p>
           </div>
 
-          <div className="flex shrink-0 flex-col items-end gap-1">
-            <DashboardSyncButton onClick={onSyncClick} />
+          <div className="flex shrink-0 flex-col items-end gap-1.5">
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-10 gap-1.5 px-3"
+                onClick={onAddClick}
+              >
+                <Plus className="h-4 w-4" />
+                Add
+              </Button>
+              <DashboardSyncButton onClick={onSyncClick} />
+            </div>
             <p className="whitespace-nowrap text-[10px] text-muted-foreground sm:text-[11px]">
               Last sync: {formatLastSync(user.sync.lastSyncedAt)}
             </p>

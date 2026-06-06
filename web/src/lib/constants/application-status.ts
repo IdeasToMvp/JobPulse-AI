@@ -42,6 +42,8 @@ export function getStatusColor(status: string): string {
   }
 }
 
+export const MANUAL_APPLICATION_ACCENT = "#0D9488";
+
 export function getStatusCardStyles(status: string): {
   accent: string;
   border: string;
@@ -55,4 +57,26 @@ export function getStatusCardStyles(status: string): {
     background: `${accent}0F`,
     hoverBackground: `${accent}1A`,
   };
+}
+
+export function getApplicationCardStyles(application: {
+  status: string;
+  isManual?: boolean;
+}): {
+  accent: string;
+  border: string;
+  background: string;
+  hoverBackground: string;
+} {
+  if (application.isManual) {
+    const accent = MANUAL_APPLICATION_ACCENT;
+    return {
+      accent,
+      border: `${accent}40`,
+      background: `${accent}0F`,
+      hoverBackground: `${accent}1A`,
+    };
+  }
+
+  return getStatusCardStyles(application.status);
 }

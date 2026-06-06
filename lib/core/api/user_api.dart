@@ -403,6 +403,49 @@ class UserApi {
     return UpdateApplicationDetailsResult.fromJson(body);
   }
 
+  Future<CreateManualApplicationResult> createManualApplication({
+    required String company,
+    required String role,
+    required String platformId,
+    required String status,
+    required String appliedAt,
+    ApplicationUserDetails? details,
+  }) async {
+    final token = await _token();
+    final payload = <String, dynamic>{
+      'company': company,
+      'role': role,
+      'platformId': platformId,
+      'status': status,
+      'appliedAt': appliedAt,
+    };
+    if (details != null && details.hasAny) {
+      payload['details'] = details.toJson();
+    }
+
+    final response = await http.post(
+      Uri.parse('${AppConfig.apiBaseUrl}/applications'),
+      headers: _headers(token),
+      body: jsonEncode(payload),
+    );
+
+    if (response.statusCode == 400) {
+      final body = jsonDecode(response.body) as Map<String, dynamic>?;
+      final message = body?['message'];
+      throw AuthException(
+        message is List
+            ? message.join(', ')
+            : (message as String? ?? 'Invalid application data'),
+      );
+    }
+    if (response.statusCode != 200) {
+      throw AuthException('Failed to create application');
+    }
+
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return CreateManualApplicationResult.fromJson(body);
+  }
+
   Future<ActivityPage> fetchActivities({
     ActivityFilter filter = ActivityFilter.all,
     int offset = 0,

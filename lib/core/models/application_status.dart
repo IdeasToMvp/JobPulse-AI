@@ -56,6 +56,22 @@ StatusCardTheme statusCardTheme(String status) {
   );
 }
 
+StatusCardTheme manualCardTheme() {
+  const accent = AppColors.manualEntry;
+  return StatusCardTheme(
+    accent: accent,
+    background: accent.withValues(alpha: 0.06),
+    border: accent.withValues(alpha: 0.25),
+  );
+}
+
+StatusCardTheme applicationCardTheme({
+  required String status,
+  bool isManual = false,
+}) {
+  return isManual ? manualCardTheme() : statusCardTheme(status);
+}
+
 bool isManualStatus(String status) {
   return manualApplicationStatuses.contains(status);
 }

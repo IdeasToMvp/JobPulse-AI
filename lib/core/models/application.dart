@@ -165,6 +165,7 @@ class JobApplication {
     required this.appliedAt,
     this.lastMessageAt,
     required this.updatedAt,
+    this.isManual = false,
     this.extractedDetails,
     this.userDetails,
     this.companyApplyCount,
@@ -179,6 +180,7 @@ class JobApplication {
   final DateTime appliedAt;
   final DateTime? lastMessageAt;
   final DateTime updatedAt;
+  final bool isManual;
   final ApplicationExtractedDetails? extractedDetails;
   final ApplicationUserDetails? userDetails;
   final int? companyApplyCount;
@@ -187,6 +189,7 @@ class JobApplication {
   JobApplication copyWith({
     String? status,
     DateTime? updatedAt,
+    bool? isManual,
     ApplicationExtractedDetails? extractedDetails,
     ApplicationUserDetails? userDetails,
     int? companyApplyCount,
@@ -201,6 +204,7 @@ class JobApplication {
       appliedAt: appliedAt,
       lastMessageAt: lastMessageAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      isManual: isManual ?? this.isManual,
       extractedDetails: extractedDetails ?? this.extractedDetails,
       userDetails: userDetails ?? this.userDetails,
       companyApplyCount: companyApplyCount ?? this.companyApplyCount,
@@ -232,6 +236,7 @@ class JobApplication {
       updatedAt: updatedRaw != null
           ? DateTime.parse(updatedRaw)
           : DateTime.now(),
+      isManual: json['isManual'] as bool? ?? false,
       extractedDetails: extractedRaw != null
           ? ApplicationExtractedDetails.fromJson(extractedRaw)
           : null,
@@ -254,6 +259,7 @@ class ApplicationDetail extends JobApplication {
     required super.appliedAt,
     super.lastMessageAt,
     required super.updatedAt,
+    super.isManual,
     super.extractedDetails,
     super.userDetails,
     super.companyApplyCount,
@@ -279,6 +285,7 @@ class ApplicationDetail extends JobApplication {
       appliedAt: base.appliedAt,
       lastMessageAt: base.lastMessageAt,
       updatedAt: base.updatedAt,
+      isManual: base.isManual,
       extractedDetails: base.extractedDetails,
       userDetails: base.userDetails,
       companyApplyCount: base.companyApplyCount,
@@ -328,3 +335,5 @@ class UpdateApplicationDetailsResult {
     );
   }
 }
+
+typedef CreateManualApplicationResult = UpdateApplicationStatusResult;

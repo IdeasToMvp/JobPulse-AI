@@ -23,6 +23,7 @@ import {
   SyncResultResponse,
 } from './application.entity';
 import { ApplicationUserDetailsDto } from './dto/application-user-details.dto';
+import { CreateManualApplicationDto } from './dto/create-manual-application.dto';
 import { ManualApplicationStatus } from './dto/update-application-status.dto';
 import {
   mergeUserDetails,
@@ -30,7 +31,8 @@ import {
   userDetailsToDb,
 } from './user-details.util';
 import { normalizeCompanyKey, rolesOverlap } from '../sync/company-name.util';
-import { formatIsoDate } from '../sync/platform-filters';
+import { formatIsoDate, startOfUtcDay } from '../sync/platform-filters';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class ApplicationsService {
@@ -441,6 +443,79 @@ export class ApplicationsService {
     };
   }
 
+  async createManualApplication(
+    userId: string,
+    dto: CreateManualApplicationDto,
+  ): Promise<{
+    application: ApplicationDetailResponse;
+    totals: Omit<SyncResultResponse, 'scan' | 'byPlatform' | 'hasSynced'>;
+    lastSyncedAt: string | null;
+  }> {
+    const appliedAt = startOfUtcDay(new Date(dto.appliedAt));
+    if (Number.isNaN(appliedAt.getTime())) {
+      throw new BadRequestException('Invalid applied date');
+    }
+
+    const today = startOfUtcDay(new Date());
+    if (appliedAt > today) {
+      throw new BadRequestException('Applied date cannot be in the future');
+    }
+
+    const now = new Date();
+    const threadId = `manual:${randomUUID()}`;
+    const userDetails = dto.details
+      ? mergeUserDetails(undefined, dto.details, now.toISOString())
+      : undefined;
+
+    const { data, error } = await this.supabase.db
+      .from('applications')
+      .insert({
+        user_id: userId,
+        thread_id: threadId,
+        cycle_index: 0,
+        platform_id: dto.platformId,
+        company: dto.company.trim(),
+        role: dto.role.trim(),
+        status: dto.status,
+        last_message_at: appliedAt.toISOString(),
+        created_at: appliedAt.toISOString(),
+        user_details: userDetails ? userDetailsToDb(userDetails) : {},
+      })
+      .select('*')
+      .single();
+
+    if (error) this.raise('createManualApplication', error);
+
+    const created = this.mapApplication(data as DbApplicationRow);
+
+    await this.appendStatusHistory({
+      userId,
+      applicationId: created.id,
+      status: dto.status,
+      source: 'user',
+      changedAt: appliedAt,
+    });
+
+    const { totals } = await this.recomputeAggregates(userId);
+    const statusHistory = await this.getStatusHistory(userId, created);
+
+    const { data: userRow } = await this.supabase.db
+      .from('users')
+      .select('last_synced_at')
+      .eq('id', userId)
+      .maybeSingle();
+
+    return {
+      application: {
+        ...this.toListItem(created),
+        statusHistory,
+        companyApplications: await this.listCompanyApplications(userId, created),
+      },
+      totals,
+      lastSyncedAt: (userRow?.last_synced_at as string) ?? null,
+    };
+  }
+
   async appendStatusHistory(input: {
     userId: string;
     applicationId: string;
@@ -514,6 +589,7 @@ export class ApplicationsService {
       appliedAt: app.createdAt.toISOString(),
       lastMessageAt: app.lastMessageAt?.toISOString(),
       updatedAt: app.updatedAt.toISOString(),
+      isManual: app.threadId.startsWith('manual:'),
       extractedDetails: app.extractedDetails,
       userDetails: app.userDetails,
     };

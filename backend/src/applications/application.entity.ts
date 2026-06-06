@@ -106,6 +106,10 @@ export interface SyncResultResponse {
   byPlatform: Record<string, PlatformSyncStats>;
 }
 
+export function isManualThreadId(threadId: string): boolean {
+  return threadId.startsWith('manual:');
+}
+
 export interface ApplicationListItem {
   id: string;
   company: string;
@@ -115,6 +119,7 @@ export interface ApplicationListItem {
   appliedAt: string;
   lastMessageAt?: string;
   updatedAt: string;
+  isManual: boolean;
   extractedDetails?: ApplicationExtractedDetails;
   userDetails?: ApplicationUserDetails;
   companyApplyCount?: number;

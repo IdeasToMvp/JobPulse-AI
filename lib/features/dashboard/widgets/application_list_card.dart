@@ -39,7 +39,10 @@ class ApplicationListCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = statusCardTheme(application.status);
+    final theme = applicationCardTheme(
+      status: application.status,
+      isManual: application.isManual,
+    );
     const radius = 16.0;
 
     return Material(
@@ -121,10 +124,39 @@ class ApplicationListCard extends StatelessWidget {
                                   ),
                                   const SizedBox(height: 6),
                                 ],
-                                Text(
-                                  _platformLabels[application.platformId] ??
-                                      application.platformId,
-                                  style: AppTextStyles.darkStatCaption,
+                                Wrap(
+                                  spacing: 6,
+                                  runSpacing: 4,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  children: [
+                                    Text(
+                                      _platformLabels[application.platformId] ??
+                                          application.platformId,
+                                      style: AppTextStyles.darkStatCaption,
+                                    ),
+                                    if (application.isManual)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.manualEntry
+                                              .withValues(alpha: 0.15),
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                        ),
+                                        child: Text(
+                                          'Manual',
+                                          style: AppTextStyles.darkStatCaption
+                                              .copyWith(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.manualEntry,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
