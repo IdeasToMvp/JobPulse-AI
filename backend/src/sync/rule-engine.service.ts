@@ -10,7 +10,7 @@ export interface ApplyDetectionResult {
 }
 
 const APPLY_PATTERN =
-  /application received|thank you for applying|we received your application|successfully applied|application submitted|your application for|applied successfully|application has been submitted/i;
+  /application received|thank you for applying|we received your application|successfully applied|application submitted|your application for|your application was sent|application was sent to|applied successfully|application has been submitted/i;
 
 const ROLE_PATTERN =
   /(?:for|as|position[:\s-]+|role[:\s-]+)([A-Za-z0-9][A-Za-z0-9\s/&.-]{2,60})/i;

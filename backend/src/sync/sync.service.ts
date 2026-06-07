@@ -48,6 +48,10 @@ import {
   parseIndeedApplyContent,
 } from './indeed-apply.parser';
 import {
+  isLinkedInApplyMessage,
+  parseLinkedInApplyContent,
+} from './linkedin-apply.parser';
+import {
   matchesPlatformApplyKeywords,
   usesSenderEmailFilter,
 } from './platform-sender-emails';
@@ -237,6 +241,26 @@ export class SyncService {
           } catch (error) {
             this.logger.error(
               `Indeed apply sync skipped message ${messageId} for user ${userId}: ${error instanceof Error ? error.message : error}`,
+            );
+          }
+          continue;
+        }
+
+        if (
+          platformId === 'linkedin' &&
+          isLinkedInApplyMessage(meta.from, meta.subject)
+        ) {
+          try {
+            const linkedInResult = await this.processLinkedInApplyEmail(
+              userId,
+              platformId,
+              meta,
+              tokens,
+            );
+            aiCalls += linkedInResult.aiCalls;
+          } catch (error) {
+            this.logger.error(
+              `LinkedIn apply sync skipped message ${messageId} for user ${userId}: ${error instanceof Error ? error.message : error}`,
             );
           }
           continue;
@@ -763,6 +787,117 @@ export class SyncService {
     if (!application && bodyForAi.trim()) {
       this.cancellation.throwIfCancelled(userId);
       const aiResult = await this.aiClassifier.extractIndeedApplyApplication({
+        subject: meta.subject,
+        body: bodyForAi,
+        html: content?.html,
+      });
+      if (aiResult) {
+        application = {
+          ...aiResult,
+          appliedAt: meta.internalDate,
+        };
+        aiCalls += 1;
+        classificationSource = 'ai';
+      }
+    }
+
+    if (!application) {
+      await this.applications.insertProcessedEmail({
+        userId,
+        messageId: meta.id,
+        threadId: meta.threadId,
+        platformId,
+        subject: meta.subject,
+        fromAddress: meta.from,
+        internalDate: meta.internalDate,
+        classificationStatus: 'unknown',
+        classificationSource: aiCalls > 0 ? 'ai' : 'rule',
+        syncPhase: 'platform',
+      });
+      return { aiCalls };
+    }
+
+    const discovered = await this.companyDiscovery.upsertFromPlatformEmail({
+      userId,
+      companyName: application.company,
+      platformId,
+      fromAddress: meta.from,
+      messageAt: meta.internalDate,
+    });
+
+    const applicationId = await this.applicationMatcher.matchAndUpsert({
+      userId,
+      platformId,
+      threadId: meta.threadId,
+      messageId: meta.id,
+      messageAt: meta.internalDate,
+      appliedAt: application.appliedAt,
+      companyName: application.company,
+      role: application.role,
+      companyId: discovered?.id,
+      extractedDetails: {
+        company: application.company,
+        role: application.role,
+        location: application.location,
+        source: classificationSource === 'ai' ? 'ai' : 'rule',
+      },
+    });
+
+    await this.applications.insertProcessedEmail({
+      userId,
+      messageId: meta.id,
+      threadId: meta.threadId,
+      platformId,
+      subject: meta.subject,
+      fromAddress: meta.from,
+      internalDate: meta.internalDate,
+      classificationStatus: 'applied',
+      classificationSource,
+      applicationId,
+      syncPhase: 'platform',
+    });
+
+    return { aiCalls };
+  }
+
+  private async processLinkedInApplyEmail(
+    userId: string,
+    platformId: string,
+    meta: {
+      id: string;
+      threadId: string;
+      from: string;
+      subject: string;
+      internalDate: Date;
+    },
+    tokens: GmailTokens,
+  ): Promise<{ aiCalls: number }> {
+    this.cancellation.throwIfCancelled(userId);
+
+    const content = await this.gmail.getMessageContent(meta.id, tokens);
+    if (!content) {
+      this.logger.warn(
+        `[LinkedIn apply] failed to fetch message body messageId=${meta.id}`,
+      );
+    }
+
+    const parsed = parseLinkedInApplyContent({
+      subject: meta.subject,
+      plainText: content?.plainText,
+      html: content?.html,
+      htmlAsText: content?.htmlAsText,
+      messageDate: meta.internalDate,
+    });
+    let application = parsed.application;
+    let aiCalls = 0;
+    let classificationSource: 'rule' | 'ai' = 'rule';
+
+    const bodyForAi =
+      content?.plainText ?? content?.htmlAsText ?? content?.html ?? '';
+
+    if (!application && bodyForAi.trim()) {
+      this.cancellation.throwIfCancelled(userId);
+      const aiResult = await this.aiClassifier.extractLinkedInApplyApplication({
         subject: meta.subject,
         body: bodyForAi,
         html: content?.html,

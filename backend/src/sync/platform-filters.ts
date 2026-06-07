@@ -2,6 +2,9 @@ import { BadRequestException } from '@nestjs/common';
 import { JobPlatformId } from '../users/job-platforms';
 import { isIndeedApplicationSubject } from './indeed-apply.parser';
 import {
+  isLinkedInApplicationSubject,
+} from './linkedin-apply.parser';
+import {
   NAUKRI_STATUS_SUBJECT_QUERY,
   isNaukriStatusSubject,
 } from './naukri-status.parser';
@@ -131,6 +134,10 @@ export function matchesPlatform(
 
     if (platformId === 'indeed') {
       return isIndeedApplicationSubject(subject);
+    }
+
+    if (platformId === 'linkedin') {
+      return isLinkedInApplicationSubject(subject);
     }
 
     return matchesPlatformApplyKeywordsSubject(subject, platformId);

@@ -245,6 +245,87 @@ export class AiClassifierService {
     }
   }
 
+  async extractLinkedInApplyApplication(input: {
+    subject: string;
+    body: string;
+    html?: string;
+  }): Promise<{
+    company: string;
+    role: string;
+    location?: string;
+  } | null> {
+    if (!this.apiKey) {
+      return null;
+    }
+
+    const trimmedHtml = input.html?.slice(0, 24_000) ?? '';
+    const trimmedBody = input.body.slice(0, 12_000);
+    if (!trimmedHtml.trim() && !trimmedBody.trim()) return null;
+
+    try {
+      const response = await fetch(
+        'https://api.openai.com/v1/chat/completions',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: this.model,
+            temperature: 0,
+            response_format: { type: 'json_object' },
+            messages: [
+              {
+                role: 'system',
+                content:
+                  'Parse a LinkedIn Easy Apply confirmation email from jobs-noreply@linkedin.com. Return JSON only: {"company":"string","role":"string","location":"string or null"}. The subject is often "{name}, your application was sent to {company}". Extract the employer company and job title from the email body job card. Ignore LinkedIn boilerplate, similar jobs, and footer links.',
+              },
+              {
+                role: 'user',
+                content: JSON.stringify({
+                  subject: input.subject,
+                  body: trimmedBody,
+                  html: trimmedHtml || undefined,
+                }),
+              },
+            ],
+          }),
+          signal: AbortSignal.timeout(OPENAI_TIMEOUT_MS),
+        },
+      );
+
+      if (!response.ok) return null;
+
+      const payload = (await response.json()) as {
+        choices?: { message?: { content?: string } }[];
+      };
+      const content = payload.choices?.[0]?.message?.content;
+      if (!content) return null;
+
+      const parsed = JSON.parse(content) as {
+        company?: string;
+        role?: string;
+        location?: string | null;
+      };
+
+      const company = parsed.company?.trim() ?? '';
+      const role = parsed.role?.trim() ?? '';
+      if (!company || !role) return null;
+
+      return {
+        company,
+        role,
+        location: parsed.location?.trim() || undefined,
+      };
+    } catch (error) {
+      this.logger.error(
+        `LinkedIn apply AI extraction failed: ${this.formatFetchError(error)}`,
+      );
+      return null;
+    }
+  }
+
   private async requestOpenAi(input: {
     from: string;
     subject: string;
