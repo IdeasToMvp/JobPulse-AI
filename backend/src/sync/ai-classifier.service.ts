@@ -81,6 +81,87 @@ export class AiClassifierService {
     }
   }
 
+  async extractNaukriStatusApplication(input: {
+    subject: string;
+    body: string;
+    html?: string;
+  }): Promise<{
+    company: string;
+    role: string;
+    location?: string;
+  } | null> {
+    if (!this.apiKey) {
+      return null;
+    }
+
+    const trimmedHtml = input.html?.slice(0, 24_000) ?? '';
+    const trimmedBody = input.body.slice(0, 12_000);
+    if (!trimmedHtml.trim() && !trimmedBody.trim()) return null;
+
+    try {
+      const response = await fetch(
+        'https://api.openai.com/v1/chat/completions',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: this.model,
+            temperature: 0,
+            response_format: { type: 'json_object' },
+            messages: [
+              {
+                role: 'system',
+                content:
+                  'Parse a Naukri job application status email. Return JSON only: {"company":"string","role":"string","location":"string or null"}. Extract the employer company name and job title from the job card in the email body. Ignore Naukri boilerplate, blog sections, and profile info.',
+              },
+              {
+                role: 'user',
+                content: JSON.stringify({
+                  subject: input.subject,
+                  body: trimmedBody,
+                  html: trimmedHtml || undefined,
+                }),
+              },
+            ],
+          }),
+          signal: AbortSignal.timeout(OPENAI_TIMEOUT_MS),
+        },
+      );
+
+      if (!response.ok) return null;
+
+      const payload = (await response.json()) as {
+        choices?: { message?: { content?: string } }[];
+      };
+      const content = payload.choices?.[0]?.message?.content;
+      if (!content) return null;
+
+      const parsed = JSON.parse(content) as {
+        company?: string;
+        role?: string;
+        location?: string | null;
+      };
+
+      const company = parsed.company?.trim() ?? '';
+      const role = parsed.role?.trim() ?? '';
+      if (!company || !role) return null;
+
+      return {
+        company,
+        role,
+        location: parsed.location?.trim() || undefined,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Naukri status AI extraction failed: ${this.formatFetchError(error)}`,
+      );
+      return null;
+    }
+  }
+
   private async requestOpenAi(input: {
     from: string;
     subject: string;

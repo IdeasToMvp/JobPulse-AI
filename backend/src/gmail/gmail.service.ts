@@ -24,6 +24,13 @@ export interface GmailMessageMeta {
   subject: string;
 }
 
+export interface GmailMessageContent {
+  plainText?: string;
+  html?: string;
+  htmlAsText?: string;
+  mimeTypes: string[];
+}
+
 @Injectable()
 export class GmailService {
   private readonly logger = new Logger(GmailService.name);
@@ -97,6 +104,43 @@ export class GmailService {
     }
   }
 
+  async getMessagePlainText(
+    messageId: string,
+    tokens: GmailTokens,
+  ): Promise<string | null> {
+    const content = await this.getMessageContent(messageId, tokens);
+    return content?.plainText ?? content?.htmlAsText ?? null;
+  }
+
+  async getMessageContent(
+    messageId: string,
+    tokens: GmailTokens,
+  ): Promise<GmailMessageContent | null> {
+    const client = this.createClient(tokens);
+
+    try {
+      const message = await this.request<GmailMessageResponse>(
+        client,
+        `${GMAIL_API}/messages/${messageId}?format=full`,
+      );
+
+      const { plainText, html } = extractBodiesFromPayload(message.payload);
+      const htmlAsText = html ? htmlToStructuredText(html) : '';
+
+      return {
+        plainText: plainText || undefined,
+        html: html || undefined,
+        htmlAsText: htmlAsText || undefined,
+        mimeTypes: collectMimeTypes(message.payload),
+      };
+    } catch (error) {
+      this.logger.warn(
+        `Failed to fetch message body ${messageId}: ${error}`,
+      );
+      return null;
+    }
+  }
+
   private createClient(tokens: GmailTokens): OAuth2Client {
     if (!this.clientId || !this.clientSecret) {
       throw new BadRequestException('Google OAuth is not configured');
@@ -133,6 +177,96 @@ export class GmailService {
   }
 }
 
+function decodeBase64Url(data: string): string {
+  const normalized = data.replace(/-/g, '+').replace(/_/g, '/');
+  return Buffer.from(normalized, 'base64').toString('utf8');
+}
+
+function stripHtml(html: string): string {
+  return htmlToStructuredText(html);
+}
+
+export function htmlToStructuredText(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/tr>/gi, '\n')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<\/h[1-6]>/gi, '\n')
+    .replace(/<\/td>/gi, '\t')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/\t+/g, ' ')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+}
+
+function extractBodiesFromPayload(
+  payload: GmailMessagePayload | undefined,
+): { plainText: string; html: string } {
+  const plainParts: string[] = [];
+  const htmlParts: string[] = [];
+
+  function walk(part: GmailMessagePayload | undefined): void {
+    if (!part) return;
+
+    if (part.body?.data) {
+      const decoded = decodeBase64Url(part.body.data);
+      if (part.mimeType === 'text/html') {
+        htmlParts.push(decoded);
+      } else {
+        plainParts.push(decoded);
+      }
+      return;
+    }
+
+    for (const nested of part.parts ?? []) {
+      walk(nested);
+    }
+  }
+
+  walk(payload);
+
+  return {
+    plainText: plainParts.join('\n').trim(),
+    html: htmlParts.join('\n').trim(),
+  };
+}
+
+function collectMimeTypes(payload: GmailMessagePayload | undefined): string[] {
+  const types = new Set<string>();
+
+  function walk(part: GmailMessagePayload | undefined): void {
+    if (!part) return;
+    if (part.mimeType) types.add(part.mimeType);
+    for (const nested of part.parts ?? []) {
+      walk(nested);
+    }
+  }
+
+  walk(payload);
+  return [...types];
+}
+
+function extractPlainTextFromPayload(
+  payload: GmailMessagePayload | undefined,
+): string {
+  const { plainText, html } = extractBodiesFromPayload(payload);
+  if (plainText) return plainText;
+  if (html) return htmlToStructuredText(html);
+  return '';
+}
+
 interface GmailListResponse {
   messages?: { id: string }[];
   nextPageToken?: string;
@@ -142,7 +276,12 @@ interface GmailMessageResponse {
   id: string;
   threadId: string;
   internalDate: string;
-  payload?: {
-    headers?: { name?: string; value?: string }[];
-  };
+  payload?: GmailMessagePayload;
+}
+
+interface GmailMessagePayload {
+  mimeType?: string;
+  body?: { data?: string };
+  parts?: GmailMessagePayload[];
+  headers?: { name?: string; value?: string }[];
 }

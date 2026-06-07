@@ -12,7 +12,7 @@ import {
   SyncResultResponse,
 } from '../applications/application.entity';
 import { ApplicationsService } from '../applications/applications.service';
-import { GmailService } from '../gmail/gmail.service';
+import { GmailService, GmailTokens } from '../gmail/gmail.service';
 import { JobPlatformId } from '../users/job-platforms';
 import { JobSourcesService } from '../users/job-sources.service';
 import { UsersService } from '../users/users.service';
@@ -38,9 +38,15 @@ import {
   resolveAutoSyncDateRange,
   resolveIncrementalFromDate,
   resolveSyncDateRange,
+  sortPlatformsForSync,
 } from './platform-filters';
 import { RuleEngineService } from './rule-engine.service';
 import { SyncCancellationService } from './sync-cancellation.service';
+import {
+  isNaukriStatusEmail,
+  NaukriStatusParseSource,
+  parseNaukriStatusContent,
+} from './naukri-status.parser';
 
 @Injectable()
 export class SyncService {
@@ -137,7 +143,9 @@ export class SyncService {
     const user = await this.users.findById(userId);
     if (!user) throw new NotFoundException('User not found');
 
-    const platformIds = await this.jobSources.getForUser(userId);
+    const platformIds = sortPlatformsForSync(
+      await this.jobSources.getForUser(userId),
+    );
     if (platformIds.length === 0) {
       throw new BadRequestException(
         'Select at least one job source before syncing',
@@ -169,6 +177,11 @@ export class SyncService {
         this.cancellation.throwIfCancelled(userId);
 
         if (await this.applications.isMessageProcessed(userId, messageId)) {
+          if (platformId === 'naukri') {
+            this.logger.log(
+              `[Naukri status] skipping already processed messageId=${messageId}`,
+            );
+          }
           skippedProcessed += 1;
           continue;
         }
@@ -194,6 +207,26 @@ export class SyncService {
         newMessages += 1;
         if (!maxInternalDate || meta.internalDate > maxInternalDate) {
           maxInternalDate = meta.internalDate;
+        }
+
+        if (
+          platformId === 'naukri' &&
+          isNaukriStatusEmail(meta.from, meta.subject)
+        ) {
+          try {
+            const statusResult = await this.processNaukriStatusEmail(
+              userId,
+              platformId,
+              meta,
+              tokens,
+            );
+            aiCalls += statusResult.aiCalls;
+          } catch (error) {
+            this.logger.error(
+              `Naukri status sync skipped message ${messageId} for user ${userId}: ${error instanceof Error ? error.message : error}`,
+            );
+          }
+          continue;
         }
 
         try {
@@ -515,6 +548,186 @@ export class SyncService {
       this.logger.error(`clearUserData failed: ${error}`);
       throw new InternalServerErrorException('Failed to clear user data');
     }
+  }
+
+  private async processNaukriStatusEmail(
+    userId: string,
+    platformId: string,
+    meta: {
+      id: string;
+      threadId: string;
+      from: string;
+      subject: string;
+      internalDate: Date;
+    },
+    tokens: GmailTokens,
+  ): Promise<{ aiCalls: number }> {
+    this.cancellation.throwIfCancelled(userId);
+
+    const content = await this.gmail.getMessageContent(meta.id, tokens);
+    if (!content) {
+      this.logger.warn(
+        `[Naukri status] failed to fetch message body messageId=${meta.id}`,
+      );
+    }
+
+    const parsed = parseNaukriStatusContent({
+      plainText: content?.plainText,
+      html: content?.html,
+      htmlAsText: content?.htmlAsText,
+      messageDate: meta.internalDate,
+    });
+    let application = parsed.application;
+    let parseSource: NaukriStatusParseSource | 'ai' = parsed.source;
+    let aiCalls = 0;
+    let classificationSource: 'rule' | 'ai' = 'rule';
+
+    const bodyForAi =
+      content?.plainText ??
+      content?.htmlAsText ??
+      content?.html ??
+      '';
+
+    if (!application && bodyForAi.trim()) {
+      this.cancellation.throwIfCancelled(userId);
+      const aiResult = await this.aiClassifier.extractNaukriStatusApplication({
+        subject: meta.subject,
+        body: bodyForAi,
+        html: content?.html,
+      });
+      if (aiResult) {
+        application = aiResult;
+        aiCalls += 1;
+        parseSource = 'ai';
+        classificationSource = 'ai';
+      }
+    }
+
+    this.logNaukriStatusDebug({
+      userId,
+      meta,
+      content,
+      application,
+      parseSource,
+      aiCalls,
+    });
+
+    if (!application) {
+      await this.applications.insertProcessedEmail({
+        userId,
+        messageId: meta.id,
+        threadId: meta.threadId,
+        platformId,
+        subject: meta.subject,
+        fromAddress: meta.from,
+        internalDate: meta.internalDate,
+        classificationStatus: 'unknown',
+        classificationSource: aiCalls > 0 ? 'ai' : 'rule',
+        syncPhase: 'platform',
+      });
+      return { aiCalls };
+    }
+
+    const discovered = await this.companyDiscovery.upsertFromPlatformEmail({
+      userId,
+      companyName: application.company,
+      platformId,
+      fromAddress: meta.from,
+      messageAt: meta.internalDate,
+    });
+
+    const applicationId = await this.applicationMatcher.matchAndUpsert({
+      userId,
+      platformId,
+      threadId: meta.threadId,
+      messageId: meta.id,
+      messageAt: meta.internalDate,
+      appliedAt: application.appliedAt,
+      companyName: application.company,
+      role: application.role,
+      companyId: discovered?.id,
+      extractedDetails: {
+        company: application.company,
+        role: application.role,
+        location: application.location,
+        source: classificationSource === 'ai' ? 'ai' : 'rule',
+      },
+    });
+
+    await this.applications.insertProcessedEmail({
+      userId,
+      messageId: meta.id,
+      threadId: meta.threadId,
+      platformId,
+      subject: meta.subject,
+      fromAddress: meta.from,
+      internalDate: meta.internalDate,
+      classificationStatus: 'applied',
+      classificationSource,
+      applicationId,
+      syncPhase: 'platform',
+    });
+
+    return { aiCalls };
+  }
+
+  private logNaukriStatusDebug(input: {
+    userId: string;
+    meta: {
+      id: string;
+      threadId: string;
+      from: string;
+      subject: string;
+      internalDate: Date;
+    };
+    content: {
+      plainText?: string;
+      html?: string;
+      htmlAsText?: string;
+      mimeTypes: string[];
+    } | null;
+    application: {
+      company: string;
+      role: string;
+      location?: string;
+      appliedAt?: Date;
+    } | null;
+    parseSource: NaukriStatusParseSource | 'ai';
+    aiCalls: number;
+  }): void {
+    const { userId, meta, content, application, parseSource, aiCalls } = input;
+
+    this.logger.log(
+      [
+        `[Naukri status] user=${userId} messageId=${meta.id} threadId=${meta.threadId}`,
+        `from=${meta.from}`,
+        `subject=${meta.subject}`,
+        `internalDate=${meta.internalDate.toISOString()}`,
+        `mimeTypes=${JSON.stringify(content?.mimeTypes ?? [])}`,
+        `plainLen=${content?.plainText?.length ?? 0}`,
+        `htmlLen=${content?.html?.length ?? 0}`,
+        `parseSource=${parseSource}`,
+        `aiCalls=${aiCalls}`,
+        `application=${JSON.stringify(application)}`,
+      ].join('\n'),
+    );
+
+    if (content?.plainText) {
+      this.logger.log(
+        `[Naukri status plain] messageId=${meta.id}\n${this.truncateForLog(content.plainText)}`,
+      );
+    }
+
+    if (content?.html) {
+      this.logger.log(
+        `[Naukri status html] messageId=${meta.id}\n${this.truncateForLog(content.html)}`,
+      );
+    }
+  }
+
+  private truncateForLog(value: string, maxLen = 120_000): string {
+    if (value.length <= maxLen) return value;
+    return `${value.slice(0, maxLen)}\n... [truncated ${value.length - maxLen} chars]`;
   }
 
 }

@@ -3,24 +3,13 @@ import 'package:flutter/material.dart';
 import '../../../core/api/sync_cancelled_exception.dart';
 import '../../../core/api/user_api.dart';
 import '../../../core/app_sync_state.dart';
+import '../../../core/constants/platform_labels.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../platforms/models/job_platform.dart';
 import '../../platforms/widgets/platform_card.dart';
 
 const mvpSyncRangeDays = 10;
-
-const _platformLabels = {
-  'linkedin': 'LinkedIn',
-  'naukri': 'Naukri',
-  'indeed': 'Indeed',
-  'instahyre': 'Instahyre',
-  'wellfound': 'Wellfound',
-  'foundit': 'Foundit',
-  'glassdoor': 'Glassdoor',
-  'career_pages': 'Career Pages',
-  'referrals': 'Referrals',
-};
 
 class SyncPrepareSheet extends StatefulWidget {
   const SyncPrepareSheet({
@@ -273,7 +262,7 @@ class _SyncPrepareSheetState extends State<SyncPrepareSheet> {
                   const SizedBox(height: 6),
                   Text(
                     '${_selectedIds.length} source${_selectedIds.length == 1 ? '' : 's'}: '
-                    '${_selectedIds.map((id) => _platformLabels[id] ?? id).join(', ')}',
+                    '${_selectedIds.map(platformLabel).join(', ')}',
                     style: AppTextStyles.darkStatCaption.copyWith(height: 1.35),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,

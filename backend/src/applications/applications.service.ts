@@ -128,8 +128,10 @@ export class ApplicationsService {
     status: ApplicationStatus;
     lastMessageId: string;
     lastMessageAt: Date;
+    appliedAt?: Date;
     extractedDetails?: ApplicationExtractedDetails;
   }): Promise<ApplicationRecord> {
+    const appliedAt = input.appliedAt ?? input.lastMessageAt;
     const { data, error } = await this.supabase.db
       .from('applications')
       .insert({
@@ -143,6 +145,7 @@ export class ApplicationsService {
         status: input.status,
         last_message_id: input.lastMessageId,
         last_message_at: input.lastMessageAt.toISOString(),
+        created_at: appliedAt.toISOString(),
         extracted_details: input.extractedDetails ?? {},
       })
       .select('*')

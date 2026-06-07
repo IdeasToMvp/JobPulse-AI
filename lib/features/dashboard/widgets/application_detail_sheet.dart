@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/api/user_api.dart';
 import '../../../core/auth/auth_service.dart';
+import '../../../core/constants/platform_labels.dart';
 import '../../../core/models/application.dart';
 import '../../../core/models/application_status.dart';
 import '../../../core/theme/app_colors.dart';
@@ -10,19 +11,6 @@ import '../../../core/utils/salary_format.dart';
 import 'active_details_sheet.dart';
 import 'application_status_badge.dart';
 import 'update_status_sheet.dart';
-
-const _platformLabels = {
-  'linkedin': 'LinkedIn',
-  'naukri': 'Naukri',
-  'indeed': 'Indeed',
-  'instahyre': 'Instahyre',
-  'wellfound': 'Wellfound',
-  'foundit': 'Foundit',
-  'glassdoor': 'Glassdoor',
-  'career_pages': 'Career Pages',
-  'referrals': 'Referrals',
-  'company_direct': 'Company email',
-};
 
 class ApplicationDetailSheet extends StatefulWidget {
   const ApplicationDetailSheet({
@@ -185,9 +173,8 @@ class _ApplicationDetailSheetState extends State<ApplicationDetailSheet> {
             _detailRow(
               'Source',
               _application.isManual
-                  ? '${_platformLabels[_application.platformId] ?? _application.platformId} · Manual entry'
-                  : _platformLabels[_application.platformId] ??
-                      _application.platformId,
+                  ? '${platformLabel(_application.platformId)} · Manual entry'
+                  : platformLabel(_application.platformId),
             ),
             const SizedBox(height: 10),
             _detailRow('Applied', _formatDate(_application.appliedAt)),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/app_sync_state.dart';
+import '../../../core/constants/platform_labels.dart';
 import '../../../core/models/user_profile.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -8,18 +9,6 @@ import '../../../core/widgets/glass_card.dart';
 import 'dashboard_sync_button.dart';
 import 'dashboard_syncing_view.dart';
 import 'sync_options_sheet.dart';
-
-const _platformLabels = {
-  'linkedin': 'LinkedIn',
-  'naukri': 'Naukri',
-  'indeed': 'Indeed',
-  'instahyre': 'Instahyre',
-  'wellfound': 'Wellfound',
-  'foundit': 'Foundit',
-  'glassdoor': 'Glassdoor',
-  'career_pages': 'Career Pages',
-  'referrals': 'Referrals',
-};
 
 class SyncedDashboardView extends StatelessWidget {
   const SyncedDashboardView({super.key});
@@ -259,7 +248,7 @@ class _DashboardContent extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    _platformLabels[entries[i].key] ?? entries[i].key,
+                    platformLabel(entries[i].key),
                     style: AppTextStyles.featureTitle.copyWith(fontSize: 13),
                   ),
                 ),

@@ -1,9 +1,16 @@
 import { BadRequestException } from '@nestjs/common';
 import { JobPlatformId } from '../users/job-platforms';
+import {
+  NAUKRI_APPLY_FROM,
+  NAUKRI_STATUS_SUBJECT_QUERY,
+  isNaukriStatusSubject,
+} from './naukri-status.parser';
+
+export { NAUKRI_APPLY_FROM };
 
 export const PLATFORM_INCLUDES: Record<JobPlatformId, string[]> = {
   linkedin: ['linkedin'],
-  naukri: ['naukri'],
+  naukri: [NAUKRI_APPLY_FROM],
   indeed: ['indeed'],
   instahyre: ['instahyre'],
   wellfound: ['wellfound', 'angel.co'],
@@ -12,6 +19,44 @@ export const PLATFORM_INCLUDES: Record<JobPlatformId, string[]> = {
   career_pages: ['application received', 'thank you for applying', 'your application'],
   referrals: ['referral', 'referred you', 'employee referral'],
 };
+
+/** Job boards win over generic career-page subject matches (e.g. LinkedIn apply mail). */
+export const JOB_BOARD_PLATFORM_IDS: JobPlatformId[] = [
+  'linkedin',
+  'naukri',
+  'indeed',
+  'instahyre',
+  'wellfound',
+  'foundit',
+  'glassdoor',
+];
+
+/** Sync processes specific senders before broad subject-only sources. */
+export const PLATFORM_SYNC_ORDER: JobPlatformId[] = [
+  ...JOB_BOARD_PLATFORM_IDS,
+  'referrals',
+  'career_pages',
+];
+
+export function sortPlatformsForSync(platformIds: string[]): JobPlatformId[] {
+  const selected = new Set(platformIds);
+  const ordered = PLATFORM_SYNC_ORDER.filter((id) => selected.has(id));
+  for (const id of platformIds) {
+    if (!ordered.includes(id as JobPlatformId)) {
+      ordered.push(id as JobPlatformId);
+    }
+  }
+  return ordered;
+}
+
+function matchesJobBoardPlatform(from: string, subject: string): boolean {
+  const haystack = `${from} ${subject}`.toLowerCase();
+  return JOB_BOARD_PLATFORM_IDS.some((platformId) =>
+    PLATFORM_INCLUDES[platformId].some((token) =>
+      haystack.includes(token.toLowerCase()),
+    ),
+  );
+}
 
 /** MVP cap — limits history sync window to reduce Gmail + AI volume. */
 export const MAX_SYNC_RANGE_DAYS = 10;
@@ -23,6 +68,15 @@ export function buildGmailQuery(
   toDate: Date,
   options?: { afterCursor?: Date },
 ): string {
+  const after = options?.afterCursor
+    ? formatGmailAfterInstant(options.afterCursor)
+    : `after:${formatGmailDate(fromDate)}`;
+  const before = formatGmailDate(addDays(toDate, 1));
+
+  if (platformId === 'naukri') {
+    return `(from:${NAUKRI_APPLY_FROM} subject:"${NAUKRI_STATUS_SUBJECT_QUERY}") ${after} before:${before}`;
+  }
+
   const tokens = PLATFORM_INCLUDES[platformId];
   const includesClause = tokens
     .map((token) => {
@@ -33,10 +87,6 @@ export function buildGmailQuery(
     })
     .join(' OR ');
 
-  const after = options?.afterCursor
-    ? formatGmailAfterInstant(options.afterCursor)
-    : `after:${formatGmailDate(fromDate)}`;
-  const before = formatGmailDate(addDays(toDate, 1));
   return `(${includesClause}) ${after} before:${before}`;
 }
 
@@ -45,7 +95,19 @@ export function matchesPlatform(
   subject: string,
   platformId: JobPlatformId,
 ): boolean {
+  if (platformId === 'naukri') {
+    return (
+      from.toLowerCase().includes(NAUKRI_APPLY_FROM) &&
+      isNaukriStatusSubject(subject)
+    );
+  }
+
   const haystack = `${from} ${subject}`.toLowerCase();
+
+  if (platformId === 'career_pages' && matchesJobBoardPlatform(from, subject)) {
+    return false;
+  }
+
   return PLATFORM_INCLUDES[platformId].some((token) =>
     haystack.includes(token.toLowerCase()),
   );

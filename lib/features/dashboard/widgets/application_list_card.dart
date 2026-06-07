@@ -1,23 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/constants/platform_labels.dart';
 import '../../../core/models/application.dart';
 import '../../../core/models/application_status.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import 'application_status_badge.dart';
-
-const _platformLabels = {
-  'linkedin': 'LinkedIn',
-  'naukri': 'Naukri',
-  'indeed': 'Indeed',
-  'instahyre': 'Instahyre',
-  'wellfound': 'Wellfound',
-  'foundit': 'Foundit',
-  'glassdoor': 'Glassdoor',
-  'career_pages': 'Career Pages',
-  'referrals': 'Referrals',
-  'company_direct': 'Company email',
-};
 
 class ApplicationListCard extends StatelessWidget {
   const ApplicationListCard({
@@ -130,8 +118,7 @@ class ApplicationListCard extends StatelessWidget {
                                   crossAxisAlignment: WrapCrossAlignment.center,
                                   children: [
                                     Text(
-                                      _platformLabels[application.platformId] ??
-                                          application.platformId,
+                                      platformLabel(application.platformId),
                                       style: AppTextStyles.darkStatCaption,
                                     ),
                                     if (application.isManual)

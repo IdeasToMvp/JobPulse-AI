@@ -11,6 +11,7 @@ export interface MatchEmailInput {
   threadId: string;
   messageId: string;
   messageAt: Date;
+  appliedAt?: Date;
   platformId: string;
   companyId?: string;
   companyName: string;
@@ -50,6 +51,7 @@ export class ApplicationMatcherService {
       status: 'applied',
       lastMessageId: input.messageId,
       lastMessageAt: input.messageAt,
+      appliedAt: input.appliedAt,
       extractedDetails: input.extractedDetails,
     });
 
@@ -67,7 +69,7 @@ export class ApplicationMatcherService {
       applicationId: created.id,
       status: 'applied',
       source: 'sync',
-      changedAt: input.messageAt,
+      changedAt: input.appliedAt ?? input.messageAt,
     });
 
     return created.id;

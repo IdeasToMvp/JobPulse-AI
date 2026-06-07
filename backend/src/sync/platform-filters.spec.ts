@@ -5,6 +5,7 @@ import {
   matchesPlatform,
   resolveAutoSyncDateRange,
   resolveSyncDateRange,
+  sortPlatformsForSync,
 } from './platform-filters';
 
 describe('platform-filters', () => {
@@ -14,7 +15,8 @@ describe('platform-filters', () => {
       new Date('2024-06-05'),
       new Date('2025-06-05'),
     );
-    expect(query).toContain('from:naukri');
+    expect(query).toContain('from:info@naukri.com');
+    expect(query).toContain('subject:"Status of your job application"');
     expect(query).toContain('after:2024/06/05');
   });
 
@@ -52,14 +54,51 @@ describe('platform-filters', () => {
   it('matches platform using includes check', () => {
     expect(
       matchesPlatform(
-        'Naukri Alerts <noreply@naukri.com>',
-        'Your application',
+        'Naukri <info@naukri.com>',
+        'Status of your job application has changed',
         'naukri',
       ),
     ).toBe(true);
     expect(
+      matchesPlatform(
+        'Naukri <info@naukri.com>',
+        'You applied for 6 jobs on 01 Jun',
+        'naukri',
+      ),
+    ).toBe(false);
+    expect(
+      matchesPlatform(
+        'Naukri Alerts <noreply@naukri.com>',
+        'Status of your job application has changed',
+        'naukri',
+      ),
+    ).toBe(false);
+    expect(
       matchesPlatform('Amazon <no-reply@amazon.com>', 'Your order', 'naukri'),
     ).toBe(false);
+  });
+
+  it('prefers job boards over career_pages for overlapping subjects', () => {
+    expect(
+      matchesPlatform(
+        'LinkedIn <jobs-noreply@linkedin.com>',
+        'Suresh, your application was sent to Synechron',
+        'career_pages',
+      ),
+    ).toBe(false);
+    expect(
+      matchesPlatform(
+        'LinkedIn <jobs-noreply@linkedin.com>',
+        'Suresh, your application was sent to Synechron',
+        'linkedin',
+      ),
+    ).toBe(true);
+  });
+
+  it('sorts sync platforms with job boards before career_pages', () => {
+    expect(
+      sortPlatformsForSync(['career_pages', 'linkedin', 'naukri']),
+    ).toEqual(['linkedin', 'naukri', 'career_pages']);
   });
 
   it('rejects ranges older than the MVP window', () => {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/app_sync_state.dart';
 import '../../core/auth/auth_state.dart';
+import '../../core/constants/platform_labels.dart';
 import '../login/login_screen.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
@@ -10,18 +11,6 @@ import '../platforms/models/job_platform.dart';
 
 class AccountScreen extends StatelessWidget {
   const AccountScreen({super.key});
-
-  static const _platformLabels = {
-    'linkedin': 'LinkedIn',
-    'naukri': 'Naukri',
-    'indeed': 'Indeed',
-    'instahyre': 'Instahyre',
-    'wellfound': 'Wellfound',
-    'foundit': 'Foundit',
-    'glassdoor': 'Glassdoor',
-    'career_pages': 'Company Careers',
-    'referrals': 'Referrals',
-  };
 
   @override
   Widget build(BuildContext context) {
@@ -191,9 +180,7 @@ class AccountScreen extends StatelessWidget {
   }
 
   Widget _jobSourcesSection(BuildContext context, AppSyncState state) {
-    final labels = state.selectedPlatformIds
-        .map((id) => _platformLabels[id] ?? id)
-        .toList();
+    final labels = state.selectedPlatformIds.map(platformLabel).toList();
 
     return _section(
       title: 'Job Sources',
@@ -524,7 +511,7 @@ class AccountScreen extends StatelessWidget {
                                 value: selected.contains(platform.id),
                                 activeColor: AppColors.secondary,
                                 title: Text(
-                                  _platformLabels[platform.id] ?? platform.label,
+                                  platform.label,
                                   style: const TextStyle(
                                     color: AppColors.onboardingTitle,
                                   ),
