@@ -82,6 +82,7 @@ export function hasExtractedDetails(
 }
 
 export interface UserDetailsFormValues {
+  role: string;
   location: string;
   salary: string;
   rounds: string;
@@ -91,6 +92,7 @@ export interface UserDetailsFormValues {
 
 export function userDetailsFormHasAny(values: UserDetailsFormValues): boolean {
   return (
+    values.role.trim().length > 0 ||
     values.location.trim().length > 0 ||
     values.salary.trim().length > 0 ||
     values.rounds.trim().length > 0 ||
@@ -138,11 +140,25 @@ export function buildOptionalStatusDetailsPayload(
 export function filterApplications(
   applications: Application[],
   statusFilter: string,
+  searchQuery?: string,
 ): Application[] {
   const sorted = [...applications].sort(
     (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
   );
 
-  if (statusFilter === "applied") return sorted;
-  return sorted.filter((app) => app.status === statusFilter);
+  let result =
+    statusFilter === "applied"
+      ? sorted
+      : sorted.filter((app) => app.status === statusFilter);
+
+  const q = searchQuery?.toLowerCase().trim() ?? "";
+  if (q.length > 0) {
+    result = result.filter(
+      (app) =>
+        app.company.toLowerCase().includes(q) ||
+        (app.role?.toLowerCase().includes(q) ?? false),
+    );
+  }
+
+  return result;
 }

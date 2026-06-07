@@ -24,10 +24,7 @@ import {
   buildCompanyGmailQueries,
   MAX_MESSAGES_PER_COMPANY,
 } from './company-query-builder';
-import {
-  CompanySyncResponse,
-  PlatformSyncResponse,
-} from './company.entity';
+import { CompanySyncResponse, PlatformSyncResponse } from './company.entity';
 import { FinalizeSyncDto } from './dto/finalize-sync.dto';
 import { RunSyncDto } from './dto/run-sync.dto';
 import {
@@ -47,6 +44,15 @@ import {
   NaukriStatusParseSource,
   parseNaukriStatusContent,
 } from './naukri-status.parser';
+import {
+  isIndeedApplyMessage,
+  IndeedApplyParseSource,
+  parseIndeedApplyContent,
+} from './indeed-apply.parser';
+import {
+  matchesPlatformApplyKeywords,
+  usesSenderEmailFilter,
+} from './platform-sender-emails';
 
 @Injectable()
 export class SyncService {
@@ -166,7 +172,7 @@ export class SyncService {
       this.cancellation.throwIfCancelled(userId);
 
       const query = buildGmailQuery(
-        platformId as JobPlatformId,
+        platformId,
         incrementalFrom,
         toDate,
         gmailAfter,
@@ -177,9 +183,9 @@ export class SyncService {
         this.cancellation.throwIfCancelled(userId);
 
         if (await this.applications.isMessageProcessed(userId, messageId)) {
-          if (platformId === 'naukri') {
+          if (platformId === 'naukri' || platformId === 'indeed') {
             this.logger.log(
-              `[Naukri status] skipping already processed messageId=${messageId}`,
+              `[${platformId}] skipping already processed messageId=${messageId}`,
             );
           }
           skippedProcessed += 1;
@@ -194,13 +200,7 @@ export class SyncService {
           continue;
         }
 
-        if (
-          !matchesPlatform(
-            meta.from,
-            meta.subject,
-            platformId as JobPlatformId,
-          )
-        ) {
+        if (!matchesPlatform(meta.from, meta.subject, platformId)) {
           continue;
         }
 
@@ -229,98 +229,34 @@ export class SyncService {
           continue;
         }
 
-        try {
-          const ruleResult = this.ruleEngine.detectApplyConfirmation(
-            meta.from,
-            meta.subject,
-          );
-          let company = ruleResult.company;
-          let role = ruleResult.role;
-          let isApply = ruleResult.isApply;
-          let extractedDetails: ApplicationExtractedDetails = {
-            company:
-              ruleResult.company !== 'Unknown Company'
-                ? ruleResult.company
-                : undefined,
-            role: ruleResult.role,
-            source: 'rule',
-          };
-          let source: 'rule' | 'ai' | 'mixed' = 'rule';
-          let applicationId: string | undefined;
-          let companyId: string | undefined;
-
-          const needsAi =
-            ruleResult.confidence === 'none' ||
-            ruleResult.confidence === 'low' ||
-            company === 'Unknown Company' ||
-            !role;
-
-          if (needsAi) {
-            this.cancellation.throwIfCancelled(userId);
-            const aiResult = await this.aiClassifier.extractApplicationDetails({
-              from: meta.from,
-              subject: meta.subject,
-              platformId,
-              ruleConfidence: ruleResult.confidence,
-              ruleIsApply: ruleResult.isApply,
-            });
-            if (aiResult) {
-              aiCalls += 1;
-              const merged = this.aiClassifier.mergeExtractedDetails(
-                ruleResult,
-                aiResult,
-              );
-              isApply = merged.isApply;
-              company = merged.company;
-              role = merged.role;
-              extractedDetails = merged.extractedDetails;
-              source = merged.source;
-            }
-          }
-
-          if (company && company !== 'Unknown Company') {
-            const discovered =
-              await this.companyDiscovery.upsertFromPlatformEmail({
-                userId,
-                companyName: company,
-                platformId,
-                fromAddress: meta.from,
-                messageAt: meta.internalDate,
-              });
-            companyId = discovered?.id;
-          }
-
-          const classificationStatus: ApplicationStatus | 'unknown' = isApply
-            ? 'applied'
-            : 'unknown';
-
-          if (isApply) {
-            applicationId = await this.applicationMatcher.matchAndUpsert({
+        if (
+          platformId === 'indeed' &&
+          isIndeedApplyMessage(meta.from, meta.subject)
+        ) {
+          try {
+            const indeedResult = await this.processIndeedApplyEmail(
               userId,
               platformId,
-              threadId: meta.threadId,
-              messageId: meta.id,
-              messageAt: meta.internalDate,
-              companyName: company,
-              role,
-              companyId,
-              extractedDetails,
-            });
+              meta,
+              tokens,
+            );
+            aiCalls += indeedResult.aiCalls;
+          } catch (error) {
+            this.logger.error(
+              `Indeed apply sync skipped message ${messageId} for user ${userId}: ${error instanceof Error ? error.message : error}`,
+            );
           }
+          continue;
+        }
 
-          await this.applications.insertProcessedEmail({
+        try {
+          const genericResult = await this.processGenericPlatformEmail(
             userId,
-            messageId: meta.id,
-            threadId: meta.threadId,
             platformId,
-            subject: meta.subject,
-            fromAddress: meta.from,
-            internalDate: meta.internalDate,
-            classificationStatus,
-            classificationSource: source === 'mixed' ? 'ai' : source,
-            applicationId,
-            syncPhase: 'platform',
-          });
+            meta,
+            tokens,
+          );
+          aiCalls += genericResult.aiCalls;
         } catch (error) {
           this.logger.error(
             `Platform sync skipped message ${messageId} for user ${userId}: ${error instanceof Error ? error.message : error}`,
@@ -363,7 +299,7 @@ export class SyncService {
 
     let companyEmailsProcessed = 0;
     let skippedProcessed = 0;
-    let aiCalls = 0;
+    const aiCalls = 0;
     let companiesScanned = 0;
 
     for (const company of companies) {
@@ -475,8 +411,10 @@ export class SyncService {
 
     const fromDate = dto?.fromDate
       ? new Date(dto.fromDate)
-      : user.syncFromDate ?? now;
-    const toDate = dto?.toDate ? new Date(dto.toDate) : user.syncToDate ?? now;
+      : (user.syncFromDate ?? now);
+    const toDate = dto?.toDate
+      ? new Date(dto.toDate)
+      : (user.syncToDate ?? now);
     const maxInternalDate = dto?.maxInternalDate
       ? new Date(dto.maxInternalDate)
       : user.lastGmailInternalDate;
@@ -550,6 +488,143 @@ export class SyncService {
     }
   }
 
+  private async processGenericPlatformEmail(
+    userId: string,
+    platformId: string,
+    meta: {
+      id: string;
+      threadId: string;
+      from: string;
+      subject: string;
+      internalDate: Date;
+    },
+    tokens: GmailTokens,
+  ): Promise<{ aiCalls: number }> {
+    this.cancellation.throwIfCancelled(userId);
+
+    const jobPlatformId = platformId as JobPlatformId;
+    const usesSender = usesSenderEmailFilter(jobPlatformId);
+
+    const content = await this.gmail.getMessageContent(meta.id, tokens);
+    const bodyForAi =
+      content?.plainText ?? content?.htmlAsText ?? content?.html ?? '';
+
+    if (
+      !usesSender &&
+      !matchesPlatformApplyKeywords(meta.subject, bodyForAi, jobPlatformId)
+    ) {
+      await this.applications.insertProcessedEmail({
+        userId,
+        messageId: meta.id,
+        threadId: meta.threadId,
+        platformId,
+        subject: meta.subject,
+        fromAddress: meta.from,
+        internalDate: meta.internalDate,
+        classificationStatus: 'unknown',
+        classificationSource: 'rule',
+        syncPhase: 'platform',
+      });
+      return { aiCalls: 0 };
+    }
+
+    const ruleResult = this.ruleEngine.detectApplyConfirmation(
+      meta.from,
+      meta.subject,
+    );
+    let company = ruleResult.company;
+    let role = ruleResult.role;
+    let isApply = ruleResult.isApply;
+    let extractedDetails: ApplicationExtractedDetails = {
+      company:
+        ruleResult.company !== 'Unknown Company'
+          ? ruleResult.company
+          : undefined,
+      role: ruleResult.role,
+      source: 'rule',
+    };
+    let source: 'rule' | 'ai' | 'mixed' = 'rule';
+    let applicationId: string | undefined;
+    let companyId: string | undefined;
+    let aiCalls = 0;
+
+    const needsAi =
+      ruleResult.confidence === 'none' ||
+      ruleResult.confidence === 'low' ||
+      company === 'Unknown Company' ||
+      !role;
+
+    if (needsAi) {
+      this.cancellation.throwIfCancelled(userId);
+      const aiResult = await this.aiClassifier.extractApplicationDetails({
+        from: meta.from,
+        subject: meta.subject,
+        platformId,
+        ruleConfidence: ruleResult.confidence,
+        ruleIsApply: ruleResult.isApply,
+        body: bodyForAi,
+        html: content?.html,
+      });
+      if (aiResult) {
+        aiCalls += 1;
+        const merged = this.aiClassifier.mergeExtractedDetails(
+          ruleResult,
+          aiResult,
+        );
+        isApply = merged.isApply;
+        company = merged.company;
+        role = merged.role;
+        extractedDetails = merged.extractedDetails;
+        source = merged.source;
+      }
+    }
+
+    if (company && company !== 'Unknown Company') {
+      const discovered = await this.companyDiscovery.upsertFromPlatformEmail({
+        userId,
+        companyName: company,
+        platformId,
+        fromAddress: meta.from,
+        messageAt: meta.internalDate,
+      });
+      companyId = discovered?.id;
+    }
+
+    const classificationStatus: ApplicationStatus | 'unknown' = isApply
+      ? 'applied'
+      : 'unknown';
+
+    if (isApply) {
+      applicationId = await this.applicationMatcher.matchAndUpsert({
+        userId,
+        platformId,
+        threadId: meta.threadId,
+        messageId: meta.id,
+        messageAt: meta.internalDate,
+        companyName: company,
+        role,
+        companyId,
+        extractedDetails,
+      });
+    }
+
+    await this.applications.insertProcessedEmail({
+      userId,
+      messageId: meta.id,
+      threadId: meta.threadId,
+      platformId,
+      subject: meta.subject,
+      fromAddress: meta.from,
+      internalDate: meta.internalDate,
+      classificationStatus,
+      classificationSource: source === 'mixed' ? 'ai' : source,
+      applicationId,
+      syncPhase: 'platform',
+    });
+
+    return { aiCalls };
+  }
+
   private async processNaukriStatusEmail(
     userId: string,
     platformId: string,
@@ -583,10 +658,7 @@ export class SyncService {
     let classificationSource: 'rule' | 'ai' = 'rule';
 
     const bodyForAi =
-      content?.plainText ??
-      content?.htmlAsText ??
-      content?.html ??
-      '';
+      content?.plainText ?? content?.htmlAsText ?? content?.html ?? '';
 
     if (!application && bodyForAi.trim()) {
       this.cancellation.throwIfCancelled(userId);
@@ -671,6 +743,182 @@ export class SyncService {
     return { aiCalls };
   }
 
+  private async processIndeedApplyEmail(
+    userId: string,
+    platformId: string,
+    meta: {
+      id: string;
+      threadId: string;
+      from: string;
+      subject: string;
+      internalDate: Date;
+    },
+    tokens: GmailTokens,
+  ): Promise<{ aiCalls: number }> {
+    this.cancellation.throwIfCancelled(userId);
+
+    const content = await this.gmail.getMessageContent(meta.id, tokens);
+    if (!content) {
+      this.logger.warn(
+        `[Indeed apply] failed to fetch message body messageId=${meta.id}`,
+      );
+    }
+
+    const parsed = parseIndeedApplyContent({
+      subject: meta.subject,
+      plainText: content?.plainText,
+      html: content?.html,
+      htmlAsText: content?.htmlAsText,
+      messageDate: meta.internalDate,
+    });
+    let application = parsed.application;
+    let parseSource: IndeedApplyParseSource | 'ai' = parsed.source;
+    let aiCalls = 0;
+    let classificationSource: 'rule' | 'ai' = 'rule';
+
+    const bodyForAi =
+      content?.plainText ?? content?.htmlAsText ?? content?.html ?? '';
+
+    if (!application && bodyForAi.trim()) {
+      this.cancellation.throwIfCancelled(userId);
+      const aiResult = await this.aiClassifier.extractIndeedApplyApplication({
+        subject: meta.subject,
+        body: bodyForAi,
+        html: content?.html,
+      });
+      if (aiResult) {
+        application = {
+          ...aiResult,
+          appliedAt: meta.internalDate,
+        };
+        aiCalls += 1;
+        parseSource = 'ai';
+        classificationSource = 'ai';
+      }
+    }
+
+    this.logIndeedApplyDebug({
+      userId,
+      meta,
+      content,
+      application,
+      parseSource,
+      aiCalls,
+    });
+
+    if (!application) {
+      await this.applications.insertProcessedEmail({
+        userId,
+        messageId: meta.id,
+        threadId: meta.threadId,
+        platformId,
+        subject: meta.subject,
+        fromAddress: meta.from,
+        internalDate: meta.internalDate,
+        classificationStatus: 'unknown',
+        classificationSource: aiCalls > 0 ? 'ai' : 'rule',
+        syncPhase: 'platform',
+      });
+      return { aiCalls };
+    }
+
+    const discovered = await this.companyDiscovery.upsertFromPlatformEmail({
+      userId,
+      companyName: application.company,
+      platformId,
+      fromAddress: meta.from,
+      messageAt: meta.internalDate,
+    });
+
+    const applicationId = await this.applicationMatcher.matchAndUpsert({
+      userId,
+      platformId,
+      threadId: meta.threadId,
+      messageId: meta.id,
+      messageAt: meta.internalDate,
+      appliedAt: application.appliedAt,
+      companyName: application.company,
+      role: application.role,
+      companyId: discovered?.id,
+      extractedDetails: {
+        company: application.company,
+        role: application.role,
+        location: application.location,
+        source: classificationSource === 'ai' ? 'ai' : 'rule',
+      },
+    });
+
+    await this.applications.insertProcessedEmail({
+      userId,
+      messageId: meta.id,
+      threadId: meta.threadId,
+      platformId,
+      subject: meta.subject,
+      fromAddress: meta.from,
+      internalDate: meta.internalDate,
+      classificationStatus: 'applied',
+      classificationSource,
+      applicationId,
+      syncPhase: 'platform',
+    });
+
+    return { aiCalls };
+  }
+
+  private logIndeedApplyDebug(input: {
+    userId: string;
+    meta: {
+      id: string;
+      threadId: string;
+      from: string;
+      subject: string;
+      internalDate: Date;
+    };
+    content: {
+      plainText?: string;
+      html?: string;
+      htmlAsText?: string;
+      mimeTypes: string[];
+    } | null;
+    application: {
+      company: string;
+      role: string;
+      location?: string;
+      appliedAt?: Date;
+    } | null;
+    parseSource: IndeedApplyParseSource | 'ai';
+    aiCalls: number;
+  }): void {
+    const { userId, meta, content, application, parseSource, aiCalls } = input;
+
+    this.logger.log(
+      [
+        `[Indeed apply] user=${userId} messageId=${meta.id} threadId=${meta.threadId}`,
+        `from=${meta.from}`,
+        `subject=${meta.subject}`,
+        `internalDate=${meta.internalDate.toISOString()}`,
+        `mimeTypes=${JSON.stringify(content?.mimeTypes ?? [])}`,
+        `plainLen=${content?.plainText?.length ?? 0}`,
+        `htmlLen=${content?.html?.length ?? 0}`,
+        `parseSource=${parseSource}`,
+        `aiCalls=${aiCalls}`,
+        `application=${JSON.stringify(application)}`,
+      ].join('\n'),
+    );
+
+    if (content?.plainText) {
+      this.logger.log(
+        `[Indeed apply plain] messageId=${meta.id}\n${this.truncateForLog(content.plainText)}`,
+      );
+    }
+
+    if (content?.html) {
+      this.logger.log(
+        `[Indeed apply html] messageId=${meta.id}\n${this.truncateForLog(content.html)}`,
+      );
+    }
+  }
+
   private logNaukriStatusDebug(input: {
     userId: string;
     meta: {
@@ -729,5 +977,4 @@ export class SyncService {
     if (value.length <= maxLen) return value;
     return `${value.slice(0, maxLen)}\n... [truncated ${value.length - maxLen} chars]`;
   }
-
 }

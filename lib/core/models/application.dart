@@ -162,6 +162,7 @@ class JobApplication {
     this.role,
     required this.status,
     required this.platformId,
+    this.platformIds = const [],
     required this.appliedAt,
     this.lastMessageAt,
     required this.updatedAt,
@@ -177,6 +178,7 @@ class JobApplication {
   final String? role;
   final String status;
   final String platformId;
+  final List<String> platformIds;
   final DateTime appliedAt;
   final DateTime? lastMessageAt;
   final DateTime updatedAt;
@@ -186,6 +188,10 @@ class JobApplication {
   final int? companyApplyCount;
   final List<String>? companyRoles;
 
+  /// All unique source platform IDs, falling back to [platformId] if empty.
+  List<String> get effectivePlatformIds =>
+      platformIds.isNotEmpty ? platformIds : [platformId];
+
   JobApplication copyWith({
     String? status,
     DateTime? updatedAt,
@@ -194,6 +200,7 @@ class JobApplication {
     ApplicationUserDetails? userDetails,
     int? companyApplyCount,
     List<String>? companyRoles,
+    List<String>? platformIds,
   }) {
     return JobApplication(
       id: id,
@@ -201,6 +208,7 @@ class JobApplication {
       role: role,
       status: status ?? this.status,
       platformId: platformId,
+      platformIds: platformIds ?? this.platformIds,
       appliedAt: appliedAt,
       lastMessageAt: lastMessageAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -219,13 +227,20 @@ class JobApplication {
     final extractedRaw = json['extractedDetails'] as Map<String, dynamic>?;
     final userRaw = json['userDetails'] as Map<String, dynamic>?;
     final rolesRaw = json['companyRoles'] as List<dynamic>?;
+    final platformIdsRaw = json['platformIds'] as List<dynamic>?;
+    final primaryPlatformId = json['platformId'] as String;
+
+    final platformIds = platformIdsRaw != null && platformIdsRaw.isNotEmpty
+        ? platformIdsRaw.map((e) => e as String).toList()
+        : [primaryPlatformId];
 
     return JobApplication(
       id: json['id'] as String,
       company: json['company'] as String,
       role: json['role'] as String?,
       status: json['status'] as String,
-      platformId: json['platformId'] as String,
+      platformId: primaryPlatformId,
+      platformIds: platformIds,
       appliedAt: appliedRaw != null
           ? DateTime.parse(appliedRaw)
           : (updatedRaw != null
@@ -256,6 +271,7 @@ class ApplicationDetail extends JobApplication {
     super.role,
     required super.status,
     required super.platformId,
+    super.platformIds,
     required super.appliedAt,
     super.lastMessageAt,
     required super.updatedAt,
@@ -282,6 +298,7 @@ class ApplicationDetail extends JobApplication {
       role: base.role,
       status: base.status,
       platformId: base.platformId,
+      platformIds: base.platformIds,
       appliedAt: base.appliedAt,
       lastMessageAt: base.lastMessageAt,
       updatedAt: base.updatedAt,

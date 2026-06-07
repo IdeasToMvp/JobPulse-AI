@@ -20,6 +20,28 @@ describe('platform-filters', () => {
     expect(query).toContain('after:2024/06/05');
   });
 
+  it('builds sender-only Gmail query for indeed', () => {
+    const query = buildGmailQuery(
+      'indeed',
+      new Date('2024-06-05'),
+      new Date('2025-06-05'),
+    );
+    expect(query).toContain('from:indeedapply@indeed.com');
+    expect(query).not.toContain('subject:indeed');
+    expect(query).toContain('after:2024/06/05');
+  });
+
+  it('builds sender-only Gmail query for linkedin', () => {
+    const query = buildGmailQuery(
+      'linkedin',
+      new Date('2024-06-05'),
+      new Date('2025-06-05'),
+    );
+    expect(query).toContain('from:jobs-noreply@linkedin.com');
+    expect(query).not.toContain('subject:linkedin');
+    expect(query).toContain('after:2024/06/05');
+  });
+
   it('uses epoch after filter when afterCursor is provided', () => {
     const cursor = new Date('2026-06-05T18:55:39.000Z');
     const query = buildGmailQuery(
@@ -40,15 +62,15 @@ describe('platform-filters', () => {
 
   it('isAfterSyncCursor rejects messages at or before cursor', () => {
     const cursor = new Date('2026-06-05T18:55:39.000Z');
-    expect(isAfterSyncCursor(new Date('2026-06-05T18:55:39.000Z'), cursor)).toBe(
-      false,
-    );
-    expect(isAfterSyncCursor(new Date('2026-06-05T10:00:00.000Z'), cursor)).toBe(
-      false,
-    );
-    expect(isAfterSyncCursor(new Date('2026-06-05T19:00:00.000Z'), cursor)).toBe(
-      true,
-    );
+    expect(
+      isAfterSyncCursor(new Date('2026-06-05T18:55:39.000Z'), cursor),
+    ).toBe(false);
+    expect(
+      isAfterSyncCursor(new Date('2026-06-05T10:00:00.000Z'), cursor),
+    ).toBe(false);
+    expect(
+      isAfterSyncCursor(new Date('2026-06-05T19:00:00.000Z'), cursor),
+    ).toBe(true);
   });
 
   it('matches platform using includes check', () => {
@@ -75,6 +97,54 @@ describe('platform-filters', () => {
     ).toBe(false);
     expect(
       matchesPlatform('Amazon <no-reply@amazon.com>', 'Your order', 'naukri'),
+    ).toBe(false);
+  });
+
+  it('matches indeed only for indeedapply application subjects', () => {
+    expect(
+      matchesPlatform(
+        'Indeed Apply <indeedapply@indeed.com>',
+        'Indeed Application: Help Desk Support Specialist',
+        'indeed',
+      ),
+    ).toBe(true);
+    expect(
+      matchesPlatform(
+        'Indeed <noreply@indeed.com>',
+        'Indeed Application: Help Desk Support Specialist',
+        'indeed',
+      ),
+    ).toBe(false);
+    expect(
+      matchesPlatform(
+        'Indeed Apply <indeedapply@indeed.com>',
+        '590802 is the verification code to apply for: Desk Support',
+        'indeed',
+      ),
+    ).toBe(false);
+  });
+
+  it('matches linkedin only for jobs-noreply sender', () => {
+    expect(
+      matchesPlatform(
+        'LinkedIn <jobs-noreply@linkedin.com>',
+        'Suresh, your application was sent to Synechron',
+        'linkedin',
+      ),
+    ).toBe(true);
+    expect(
+      matchesPlatform(
+        'LinkedIn <jobs-noreply@linkedin.com>',
+        'New jobs matching Software Engineer',
+        'linkedin',
+      ),
+    ).toBe(false);
+    expect(
+      matchesPlatform(
+        'LinkedIn <jobs@linkedin.com>',
+        'Suresh, your application was sent to Synechron',
+        'linkedin',
+      ),
     ).toBe(false);
   });
 

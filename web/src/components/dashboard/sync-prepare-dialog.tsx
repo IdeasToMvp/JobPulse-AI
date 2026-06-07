@@ -1,7 +1,7 @@
 "use client";
 
-import { Clock, Info, Loader2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Clock, Info } from "lucide-react";
+import { useState } from "react";
 
 import { PlatformGrid } from "@/components/platforms/platform-grid";
 import { Button } from "@/components/ui/button";
@@ -40,9 +40,7 @@ export function SyncPrepareDialog({
           : (user?.jobSources ?? []),
       ),
   );
-  const [isSaving, setIsSaving] = useState(false);
-
-  const { fromDate, toDate } = useMemo(() => getMvpSyncDateRange(), [open]);
+  const { fromDate, toDate } = getMvpSyncDateRange();
 
   function togglePlatform(id: string) {
     setSelectedIds((current) => {
@@ -54,26 +52,19 @@ export function SyncPrepareDialog({
   }
 
   function handleClose() {
-    if (isSaving) return;
     onClose();
   }
 
-  async function handleStartSync() {
-    if (selectedIds.size === 0 || isSaving) return;
-    setIsSaving(true);
+  function handleStartSync() {
+    if (selectedIds.size === 0) return;
     onClose();
-
-    try {
-      await runHistorySync({
-        platformIds: [...selectedIds],
-        fromDate,
-        toDate,
-      });
-    } catch {
+    void runHistorySync({
+      platformIds: [...selectedIds],
+      fromDate,
+      toDate,
+    }).catch(() => {
       // sync context resets; user can retry from dashboard
-    } finally {
-      setIsSaving(false);
-    }
+    });
   }
 
   const selectedLabels = [...selectedIds].map(getPlatformLabel).join(", ");
@@ -148,14 +139,10 @@ export function SyncPrepareDialog({
           <Button
             fullWidth
             size="lg"
-            disabled={isSaving || selectedIds.size === 0}
-            onClick={() => void handleStartSync()}
+            disabled={selectedIds.size === 0}
+            onClick={handleStartSync}
           >
-            {isSaving ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : (
-              "Start Sync"
-            )}
+            Start Sync
           </Button>
         </div>
       </div>

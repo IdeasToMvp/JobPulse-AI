@@ -45,6 +45,7 @@ export interface ApplicationRecord {
   threadId: string;
   cycleIndex: number;
   platformId: string;
+  platformIds: string[];
   company: string;
   companyId?: string;
   role?: string;
@@ -116,6 +117,7 @@ export interface ApplicationListItem {
   role?: string;
   status: ApplicationStatus;
   platformId: string;
+  platformIds: string[];
   appliedAt: string;
   lastMessageAt?: string;
   updatedAt: string;
@@ -161,6 +163,7 @@ export interface DbApplicationRow {
   thread_id: string;
   cycle_index: number;
   platform_id: string;
+  platform_ids: string[] | null;
   company: string;
   company_id: string | null;
   role: string | null;

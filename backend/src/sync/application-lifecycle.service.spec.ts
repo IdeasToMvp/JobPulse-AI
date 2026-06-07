@@ -1,4 +1,7 @@
-import { ApplicationLifecycleService, GHOSTED_AFTER_DAYS } from './application-lifecycle.service';
+import {
+  ApplicationLifecycleService,
+  GHOSTED_AFTER_DAYS,
+} from './application-lifecycle.service';
 
 describe('ApplicationLifecycleService', () => {
   const lifecycle = new ApplicationLifecycleService();
@@ -9,6 +12,7 @@ describe('ApplicationLifecycleService', () => {
     threadId: 'thread-1',
     cycleIndex: 0,
     platformId: 'linkedin',
+    platformIds: ['linkedin'],
     company: 'Microsoft',
     status: 'applied' as const,
     createdAt: new Date(),
@@ -35,8 +39,18 @@ describe('ApplicationLifecycleService', () => {
     const ids = lifecycle.findGhostedCandidates(
       [
         { ...baseApp, status: 'active', lastMessageAt: staleDate },
-        { ...baseApp, id: 'app-2', status: 'interview', lastMessageAt: staleDate },
-        { ...baseApp, id: 'app-3', status: 'rejected', lastMessageAt: staleDate },
+        {
+          ...baseApp,
+          id: 'app-2',
+          status: 'interview',
+          lastMessageAt: staleDate,
+        },
+        {
+          ...baseApp,
+          id: 'app-3',
+          status: 'rejected',
+          lastMessageAt: staleDate,
+        },
       ],
       new Date(),
     );

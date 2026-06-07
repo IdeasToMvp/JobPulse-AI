@@ -35,6 +35,8 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
   int _lastFeedRevision = 0;
   int _lastAppliedCount = 0;
   String _statusFilter = 'applied';
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -49,6 +51,7 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
   @override
   void dispose() {
     AppSyncState.instance.removeListener(_onSyncStateChanged);
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -100,8 +103,22 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
     final sorted = [..._applications]
       ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
 
-    if (_statusFilter == 'applied') return sorted;
-    return sorted.where((a) => a.status == _statusFilter).toList();
+    var result = _statusFilter == 'applied'
+        ? sorted
+        : sorted.where((a) => a.status == _statusFilter).toList();
+
+    final q = _searchQuery.trim().toLowerCase();
+    if (q.isNotEmpty) {
+      result = result
+          .where(
+            (a) =>
+                a.company.toLowerCase().contains(q) ||
+                (a.role?.toLowerCase().contains(q) ?? false),
+          )
+          .toList();
+    }
+
+    return result;
   }
 
   int _countForStatus(String statusId) {
@@ -127,6 +144,48 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
   String _filterLabel(_StatusFilter filter) {
     final count = _countForStatus(filter.id);
     return '${filter.label} ($count)';
+  }
+
+  Widget _buildSearchBar() {
+    return TextField(
+      controller: _searchController,
+      onChanged: (v) => setState(() => _searchQuery = v),
+      decoration: InputDecoration(
+        hintText: 'Search by company or role…',
+        hintStyle: AppTextStyles.darkStatCaption,
+        prefixIcon: const Icon(
+          Icons.search_rounded,
+          size: 20,
+          color: AppColors.dashboardMuted,
+        ),
+        suffixIcon: _searchQuery.isNotEmpty
+            ? IconButton(
+                icon: const Icon(Icons.close_rounded, size: 18),
+                color: AppColors.dashboardMuted,
+                onPressed: () {
+                  _searchController.clear();
+                  setState(() => _searchQuery = '');
+                },
+              )
+            : null,
+        filled: true,
+        fillColor: AppColors.white,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.platformsCardBorder),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.platformsCardBorder),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.primary),
+        ),
+      ),
+    );
   }
 
   Future<void> _load() async {
@@ -233,6 +292,8 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
                               ],
                             ),
                           ),
+                          const SizedBox(height: 10),
+                          _buildSearchBar(),
                         ],
                       ),
                     ),
@@ -336,6 +397,8 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
                             ],
                           ),
                         ),
+                        const SizedBox(height: 10),
+                        _buildSearchBar(),
                       ],
                     ),
                   ),
@@ -347,8 +410,10 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
                       child: Padding(
                         padding: const EdgeInsets.all(32),
                         child: Text(
-                          'No applications with status '
-                          '"${_statusFilters.firstWhere((f) => f.id == _statusFilter).label}".',
+                          _searchQuery.trim().isNotEmpty
+                              ? 'No results for "$_searchQuery".'
+                              : 'No applications with status '
+                                  '"${_statusFilters.firstWhere((f) => f.id == _statusFilter).label}".',
                           textAlign: TextAlign.center,
                           style: AppTextStyles.darkSubtitle,
                         ),

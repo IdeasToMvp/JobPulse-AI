@@ -2,11 +2,16 @@ import { ApplicationMatcherService } from './application-matcher.service';
 import { ApplicationsService } from '../applications/applications.service';
 import { ActivitiesService } from '../activities/activities.service';
 
+/* eslint-disable @typescript-eslint/unbound-method */
 describe('ApplicationMatcherService', () => {
   const applications = {
     getLatestApplicationForThread: jest.fn(),
+    getLatestApplicationForCompanyNameAndRole: jest
+      .fn()
+      .mockResolvedValue(null),
     createApplication: jest.fn(),
     touchApplicationMessage: jest.fn(),
+    addPlatformToApplication: jest.fn(),
     appendStatusHistory: jest.fn().mockResolvedValue(undefined),
   } as unknown as ApplicationsService;
 
@@ -57,19 +62,17 @@ describe('ApplicationMatcherService', () => {
   });
 
   it('touches existing application for same thread without creating', async () => {
-    applications.getLatestApplicationForThread = jest
-      .fn()
-      .mockResolvedValue({
-        id: 'app-1',
-        userId: 'user-1',
-        threadId: 'thread-1',
-        cycleIndex: 0,
-        platformId: 'linkedin',
-        company: 'Microsoft',
-        status: 'applied',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
+    applications.getLatestApplicationForThread = jest.fn().mockResolvedValue({
+      id: 'app-1',
+      userId: 'user-1',
+      threadId: 'thread-1',
+      cycleIndex: 0,
+      platformId: 'linkedin',
+      company: 'Microsoft',
+      status: 'applied',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
     applications.touchApplicationMessage = jest.fn().mockResolvedValue({
       id: 'app-1',
     });
@@ -83,6 +86,37 @@ describe('ApplicationMatcherService', () => {
     expect(applications.touchApplicationMessage).toHaveBeenCalled();
     expect(applications.createApplication).not.toHaveBeenCalled();
     expect(activities.recordApplicationDetected).not.toHaveBeenCalled();
+  });
+
+  it('merges platforms when same company+role on different source', async () => {
+    applications.getLatestApplicationForThread = jest
+      .fn()
+      .mockResolvedValue(null);
+    applications.getLatestApplicationForCompanyNameAndRole = jest
+      .fn()
+      .mockResolvedValue({
+        id: 'app-linkedin',
+        platformId: 'linkedin',
+        company: 'Microsoft',
+        role: 'Software Engineer',
+      });
+    applications.addPlatformToApplication = jest.fn().mockResolvedValue({
+      id: 'app-linkedin',
+    });
+
+    const id = await matcher.matchAndUpsert({
+      ...baseInput,
+      threadId: 'thread-indeed',
+      platformId: 'indeed',
+    });
+
+    expect(id).toBe('app-linkedin');
+    expect(applications.addPlatformToApplication).toHaveBeenCalledWith(
+      'app-linkedin',
+      'indeed',
+      expect.objectContaining({ lastMessageId: 'msg-1' }),
+    );
+    expect(applications.createApplication).not.toHaveBeenCalled();
   });
 
   it('creates new application for re-apply on different thread', async () => {
@@ -105,3 +139,4 @@ describe('ApplicationMatcherService', () => {
     expect(applications.createApplication).toHaveBeenCalled();
   });
 });
+/* eslint-enable @typescript-eslint/unbound-method */

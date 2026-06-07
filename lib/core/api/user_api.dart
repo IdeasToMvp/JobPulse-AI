@@ -374,13 +374,16 @@ class UserApi {
 
   Future<UpdateApplicationDetailsResult> updateApplicationDetails(
     String id,
-    ApplicationUserDetails details,
-  ) async {
+    ApplicationUserDetails details, {
+    String? role,
+  }) async {
     final token = await _token();
+    final payload = <String, dynamic>{'details': details.toPatchJson()};
+    if (role != null) payload['role'] = role;
     final response = await http.patch(
       Uri.parse('${AppConfig.apiBaseUrl}/applications/$id/details'),
       headers: _headers(token),
-      body: jsonEncode({'details': details.toPatchJson()}),
+      body: jsonEncode(payload),
     );
 
     if (response.statusCode == 400) {

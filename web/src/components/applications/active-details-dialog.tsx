@@ -83,6 +83,7 @@ function ActiveDetailsForm({
   const isEditOnly = mode === "editOnly";
 
   const [values, setValues] = useState<UserDetailsFormValues>(() => ({
+    role: application.role ?? extracted?.role ?? "",
     location: user?.location ?? extracted?.location ?? "",
     salary: user?.salary ?? extracted?.salary ?? "",
     rounds: user?.numberOfRounds?.toString() ?? "",
@@ -106,7 +107,11 @@ function ActiveDetailsForm({
     try {
       if (isEditOnly) {
         const details = buildUserDetailsPatchPayload(values);
-        const result = await updateApplicationDetails(application.id, details);
+        const result = await updateApplicationDetails(
+          application.id,
+          details,
+          values.role,
+        );
         onUpdated(result.application);
         onClose();
         return;
@@ -143,6 +148,12 @@ function ActiveDetailsForm({
       ) : null}
 
       <div className="mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain pr-1">
+        <FormField
+          label="Role"
+          value={values.role}
+          placeholder="e.g. Software Engineer"
+          onChange={(value) => updateField("role", value)}
+        />
         <FormField
           label="Location"
           value={values.location}

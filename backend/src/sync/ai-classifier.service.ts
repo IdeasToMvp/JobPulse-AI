@@ -33,6 +33,8 @@ export class AiClassifierService {
     platformId: string;
     ruleConfidence: RuleConfidence;
     ruleIsApply?: boolean;
+    body?: string;
+    html?: string;
   }): Promise<AiExtractionResult | null> {
     if (!this.apiKey) {
       this.logger.warn('OPENAI_API_KEY not set; skipping AI extraction');
@@ -162,11 +164,99 @@ export class AiClassifierService {
     }
   }
 
+  async extractIndeedApplyApplication(input: {
+    subject: string;
+    body: string;
+    html?: string;
+  }): Promise<{
+    company: string;
+    role: string;
+    location?: string;
+  } | null> {
+    if (!this.apiKey) {
+      return null;
+    }
+
+    const trimmedHtml = input.html?.slice(0, 24_000) ?? '';
+    const trimmedBody = input.body.slice(0, 12_000);
+    if (!trimmedHtml.trim() && !trimmedBody.trim()) return null;
+
+    try {
+      const response = await fetch(
+        'https://api.openai.com/v1/chat/completions',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: this.model,
+            temperature: 0,
+            response_format: { type: 'json_object' },
+            messages: [
+              {
+                role: 'system',
+                content:
+                  'Parse an Indeed application confirmation email from indeedapply@indeed.com. Return JSON only: {"company":"string","role":"string","location":"string or null"}. Use the subject line and email body. The subject often starts with "Indeed Application:" followed by the job title. Ignore Indeed boilerplate and footer links.',
+              },
+              {
+                role: 'user',
+                content: JSON.stringify({
+                  subject: input.subject,
+                  body: trimmedBody,
+                  html: trimmedHtml || undefined,
+                }),
+              },
+            ],
+          }),
+          signal: AbortSignal.timeout(OPENAI_TIMEOUT_MS),
+        },
+      );
+
+      if (!response.ok) return null;
+
+      const payload = (await response.json()) as {
+        choices?: { message?: { content?: string } }[];
+      };
+      const content = payload.choices?.[0]?.message?.content;
+      if (!content) return null;
+
+      const parsed = JSON.parse(content) as {
+        company?: string;
+        role?: string;
+        location?: string | null;
+      };
+
+      const company = parsed.company?.trim() ?? '';
+      const role = parsed.role?.trim() ?? '';
+      if (!company || !role) return null;
+
+      return {
+        company,
+        role,
+        location: parsed.location?.trim() || undefined,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Indeed apply AI extraction failed: ${this.formatFetchError(error)}`,
+      );
+      return null;
+    }
+  }
+
   private async requestOpenAi(input: {
     from: string;
     subject: string;
     platformId: string;
+    body?: string;
+    html?: string;
   }): Promise<Response | null> {
+    const trimmedBody = input.body?.slice(0, 12_000) ?? '';
+    const trimmedHtml = input.html?.slice(0, 24_000) ?? '';
+    const hasBody =
+      trimmedBody.trim().length > 0 || trimmedHtml.trim().length > 0;
+
     let lastError: unknown;
 
     for (let attempt = 1; attempt <= OPENAI_MAX_ATTEMPTS; attempt++) {
@@ -186,8 +276,9 @@ export class AiClassifierService {
               messages: [
                 {
                   role: 'system',
-                  content:
-                    'Extract job application details from email headers only (from + subject). Return JSON only: {"isApplyConfirmation":boolean,"company":"string","role":"string or null","salary":"string or null","location":"string or null","employmentType":"string or null","confidence":0.0-1.0}. isApplyConfirmation is true only for emails confirming the user submitted/applied to a job.',
+                  content: hasBody
+                    ? 'Extract job application details from a job-board email. Return JSON only: {"isApplyConfirmation":boolean,"company":"string","role":"string or null","salary":"string or null","location":"string or null","employmentType":"string or null","confidence":0.0-1.0}. isApplyConfirmation is true only for emails confirming the user submitted/applied to a job. Prefer the email body when provided.'
+                    : 'Extract job application details from email headers only (from + subject). Return JSON only: {"isApplyConfirmation":boolean,"company":"string","role":"string or null","salary":"string or null","location":"string or null","employmentType":"string or null","confidence":0.0-1.0}. isApplyConfirmation is true only for emails confirming the user submitted/applied to a job.',
                 },
                 {
                   role: 'user',
@@ -195,6 +286,8 @@ export class AiClassifierService {
                     from: input.from,
                     subject: input.subject,
                     platform: input.platformId,
+                    body: hasBody ? trimmedBody : undefined,
+                    html: hasBody ? trimmedHtml || undefined : undefined,
                   }),
                 },
               ],
@@ -236,7 +329,8 @@ export class AiClassifierService {
         error.cause instanceof Error
           ? error.cause.message
           : error.cause != null
-            ? String(error.cause)
+            ? // eslint-disable-next-line @typescript-eslint/no-base-to-string
+              String(error.cause)
             : '';
       return cause ? `${error.message} (${cause})` : error.message;
     }
@@ -268,7 +362,8 @@ export class AiClassifierService {
         company: rule.company,
         role: rule.role,
         extractedDetails: {
-          company: rule.company !== 'Unknown Company' ? rule.company : undefined,
+          company:
+            rule.company !== 'Unknown Company' ? rule.company : undefined,
           role: rule.role,
           source: 'rule',
         },

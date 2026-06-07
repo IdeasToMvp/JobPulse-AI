@@ -1,24 +1,29 @@
 import { BadRequestException } from '@nestjs/common';
 import { JobPlatformId } from '../users/job-platforms';
+import { isIndeedApplicationSubject } from './indeed-apply.parser';
 import {
-  NAUKRI_APPLY_FROM,
   NAUKRI_STATUS_SUBJECT_QUERY,
   isNaukriStatusSubject,
 } from './naukri-status.parser';
+import {
+  PLATFORM_SENDER_EMAILS,
+  PLATFORM_SUBJECT_PHRASES,
+  buildSenderFromClause,
+  matchesPlatformApplyKeywordsSubject,
+  matchesPlatformSender,
+  usesSenderEmailFilter,
+} from './platform-sender-emails';
 
-export { NAUKRI_APPLY_FROM };
+export {
+  PLATFORM_SENDER_EMAILS,
+  PLATFORM_SUBJECT_PHRASES,
+} from './platform-sender-emails';
 
-export const PLATFORM_INCLUDES: Record<JobPlatformId, string[]> = {
-  linkedin: ['linkedin'],
-  naukri: [NAUKRI_APPLY_FROM],
-  indeed: ['indeed'],
-  instahyre: ['instahyre'],
-  wellfound: ['wellfound', 'angel.co'],
-  foundit: ['foundit', 'monster'],
-  glassdoor: ['glassdoor'],
-  career_pages: ['application received', 'thank you for applying', 'your application'],
-  referrals: ['referral', 'referred you', 'employee referral'],
-};
+/** @deprecated Use PLATFORM_SENDER_EMAILS.naukri */
+export const NAUKRI_APPLY_FROM = PLATFORM_SENDER_EMAILS.naukri[0];
+
+/** @deprecated Use PLATFORM_SENDER_EMAILS.indeed */
+export const INDEED_APPLY_FROM = PLATFORM_SENDER_EMAILS.indeed[0];
 
 /** Job boards win over generic career-page subject matches (e.g. LinkedIn apply mail). */
 export const JOB_BOARD_PLATFORM_IDS: JobPlatformId[] = [
@@ -50,11 +55,23 @@ export function sortPlatformsForSync(platformIds: string[]): JobPlatformId[] {
 }
 
 function matchesJobBoardPlatform(from: string, subject: string): boolean {
-  const haystack = `${from} ${subject}`.toLowerCase();
   return JOB_BOARD_PLATFORM_IDS.some((platformId) =>
-    PLATFORM_INCLUDES[platformId].some((token) =>
-      haystack.includes(token.toLowerCase()),
-    ),
+    matchesPlatformBySenderOrSubject(from, subject, platformId),
+  );
+}
+
+function matchesPlatformBySenderOrSubject(
+  from: string,
+  subject: string,
+  platformId: JobPlatformId,
+): boolean {
+  if (usesSenderEmailFilter(platformId)) {
+    return matchesPlatformSender(from, platformId);
+  }
+
+  const haystack = `${from} ${subject}`.toLowerCase();
+  return PLATFORM_SUBJECT_PHRASES[platformId].some((token) =>
+    haystack.includes(token.toLowerCase()),
   );
 }
 
@@ -73,11 +90,15 @@ export function buildGmailQuery(
     : `after:${formatGmailDate(fromDate)}`;
   const before = formatGmailDate(addDays(toDate, 1));
 
-  if (platformId === 'naukri') {
-    return `(from:${NAUKRI_APPLY_FROM} subject:"${NAUKRI_STATUS_SUBJECT_QUERY}") ${after} before:${before}`;
+  const fromClause = buildSenderFromClause(platformId);
+  if (fromClause) {
+    if (platformId === 'naukri') {
+      return `(${fromClause} subject:"${NAUKRI_STATUS_SUBJECT_QUERY}") ${after} before:${before}`;
+    }
+    return `(${fromClause}) ${after} before:${before}`;
   }
 
-  const tokens = PLATFORM_INCLUDES[platformId];
+  const tokens = PLATFORM_SUBJECT_PHRASES[platformId];
   const includesClause = tokens
     .map((token) => {
       if (token.includes(' ')) {
@@ -95,22 +116,27 @@ export function matchesPlatform(
   subject: string,
   platformId: JobPlatformId,
 ): boolean {
-  if (platformId === 'naukri') {
-    return (
-      from.toLowerCase().includes(NAUKRI_APPLY_FROM) &&
-      isNaukriStatusSubject(subject)
-    );
-  }
-
-  const haystack = `${from} ${subject}`.toLowerCase();
-
   if (platformId === 'career_pages' && matchesJobBoardPlatform(from, subject)) {
     return false;
   }
 
-  return PLATFORM_INCLUDES[platformId].some((token) =>
-    haystack.includes(token.toLowerCase()),
-  );
+  if (usesSenderEmailFilter(platformId)) {
+    if (!matchesPlatformSender(from, platformId)) {
+      return false;
+    }
+
+    if (platformId === 'naukri') {
+      return isNaukriStatusSubject(subject);
+    }
+
+    if (platformId === 'indeed') {
+      return isIndeedApplicationSubject(subject);
+    }
+
+    return matchesPlatformApplyKeywordsSubject(subject, platformId);
+  }
+
+  return matchesPlatformBySenderOrSubject(from, subject, platformId);
 }
 
 export function resolveSyncDateRange(input?: {
@@ -120,9 +146,7 @@ export function resolveSyncDateRange(input?: {
   const today = startOfUtcDay(new Date());
   const defaultFrom = addDays(today, -MAX_SYNC_RANGE_DAYS);
 
-  const toDate = input?.toDate
-    ? startOfUtcDay(new Date(input.toDate))
-    : today;
+  const toDate = input?.toDate ? startOfUtcDay(new Date(input.toDate)) : today;
 
   const fromDate = input?.fromDate
     ? startOfUtcDay(new Date(input.fromDate))
@@ -184,10 +208,7 @@ export function formatGmailAfterInstant(instant: Date): string {
   return `after:${Math.floor(instant.getTime() / 1000)}`;
 }
 
-export function isAfterSyncCursor(
-  messageDate: Date,
-  cursor: Date,
-): boolean {
+export function isAfterSyncCursor(messageDate: Date, cursor: Date): boolean {
   return messageDate.getTime() > cursor.getTime();
 }
 

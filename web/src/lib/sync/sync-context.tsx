@@ -68,18 +68,9 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     setSyncStepDetail(null);
   }, []);
 
-  const runSync = useCallback(
+  const executeSyncPhases = useCallback(
     async (options: RunSyncOptions = {}) => {
-      if (syncButtonState === "syncing") return;
-
       const incrementalOnly = options.incrementalOnly ?? false;
-      setSyncButtonState("syncing");
-      setStep(
-        "connecting",
-        incrementalOnly
-          ? "Checking for new emails since last sync"
-          : "Verifying secure access",
-      );
 
       await beginSyncSession();
 
@@ -198,7 +189,25 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         endSyncSession();
       }
     },
-    [mergeUserSync, refreshUser, resetSyncUi, setStep, syncButtonState, user?.sync.hasSynced],
+    [mergeUserSync, refreshUser, resetSyncUi, setStep, user?.sync.hasSynced],
+  );
+
+  const runSync = useCallback(
+    async (options: RunSyncOptions = {}) => {
+      if (syncButtonState === "syncing") return;
+
+      const incrementalOnly = options.incrementalOnly ?? false;
+      setSyncButtonState("syncing");
+      setStep(
+        "connecting",
+        incrementalOnly
+          ? "Checking for new emails since last sync"
+          : "Verifying secure access",
+      );
+
+      await executeSyncPhases(options);
+    },
+    [executeSyncPhases, setStep, syncButtonState],
   );
 
   const runIncrementalSync = useCallback(async () => {
@@ -211,15 +220,26 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       fromDate: Date;
       toDate: Date;
     }) => {
-      await markImportHistorySync();
-      await saveJobSources(input.platformIds);
-      await refreshUser();
-      await runSync({
-        fromDate: input.fromDate,
-        toDate: input.toDate,
-      });
+      if (syncButtonState === "syncing") return;
+
+      setSyncButtonState("syncing");
+      setStep("connecting", "Preparing sync");
+
+      try {
+        await markImportHistorySync();
+        await saveJobSources(input.platformIds);
+        await refreshUser();
+        setStep("connecting", "Verifying secure access");
+        await executeSyncPhases({
+          fromDate: input.fromDate,
+          toDate: input.toDate,
+        });
+      } catch (error) {
+        resetSyncUi();
+        throw error;
+      }
     },
-    [refreshUser, runSync],
+    [executeSyncPhases, refreshUser, resetSyncUi, setStep, syncButtonState],
   );
 
   const cancelSync = useCallback(async () => {

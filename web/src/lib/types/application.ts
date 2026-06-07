@@ -42,6 +42,7 @@ export interface Application {
   role?: string;
   status: ApplicationStatus;
   platformId: string;
+  platformIds?: string[];
   appliedAt: string;
   lastMessageAt?: string;
   updatedAt: string;

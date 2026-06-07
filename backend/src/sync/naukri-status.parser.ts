@@ -1,3 +1,5 @@
+import { matchesPlatformSender } from './platform-sender-emails';
+
 export const NAUKRI_APPLY_FROM = 'info@naukri.com';
 export const NAUKRI_STATUS_SUBJECT_QUERY = 'Status of your job application';
 
@@ -20,10 +22,14 @@ export interface NaukriStatusApplication {
   appliedAt?: Date;
 }
 
-export type NaukriStatusParseSource = 'html' | 'html-text' | 'plain-text' | 'none';
+export type NaukriStatusParseSource =
+  | 'html'
+  | 'html-text'
+  | 'plain-text'
+  | 'none';
 
 export function isNaukriApplyEmail(from: string): boolean {
-  return from.toLowerCase().includes(NAUKRI_APPLY_FROM);
+  return matchesPlatformSender(from, 'naukri');
 }
 
 export function isNaukriStatusSubject(subject: string): boolean {
@@ -39,7 +45,10 @@ export function parseNaukriStatusContent(input: {
   html?: string | null;
   htmlAsText?: string | null;
   messageDate: Date;
-}): { application: NaukriStatusApplication | null; source: NaukriStatusParseSource } {
+}): {
+  application: NaukriStatusApplication | null;
+  source: NaukriStatusParseSource;
+} {
   const html = input.html?.trim() ?? '';
   if (html) {
     const fromHtml = parseNaukriStatusHtml(html, input.messageDate);
@@ -204,7 +213,12 @@ function looksLikeCompanyName(line: string): boolean {
   if (INDIAN_CITIES.test(trimmed)) return false;
   if (/applied/i.test(trimmed)) return false;
   if (/^view status$/i.test(trimmed)) return false;
-  if (isLikelyJobTitle(trimmed) && !/solutions|systems|technologies|services|labs|corp|inc|ltd|pvt|consulting|group|company|studio|global|digital|software|infotech|tech\b/i.test(trimmed)) {
+  if (
+    isLikelyJobTitle(trimmed) &&
+    !/solutions|systems|technologies|services|labs|corp|inc|ltd|pvt|consulting|group|company|studio|global|digital|software|infotech|tech\b/i.test(
+      trimmed,
+    )
+  ) {
     return false;
   }
   return /^[A-Za-z0-9][A-Za-z0-9\s.&'-]{1,79}$/.test(trimmed);
@@ -261,8 +275,9 @@ function decodeHtmlEntities(text: string): string {
     .replace(/&lt;/gi, '<')
     .replace(/&gt;/gi, '>')
     .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+
     .replace(/&#x([0-9a-f]+);/gi, (_, hex) =>
-      String.fromCharCode(parseInt(hex, 16)),
+      String.fromCharCode(parseInt(hex as string, 16)),
     );
 }
 

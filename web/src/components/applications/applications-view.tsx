@@ -1,6 +1,6 @@
 "use client";
 
-import { Briefcase, Loader2, Plus } from "lucide-react";
+import { Briefcase, Loader2, Plus, Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { ActiveDetailsDialog } from "@/components/applications/active-details-dialog";
@@ -47,6 +47,7 @@ function SyncedApplicationsContent({
 }) {
   const [applications, setApplications] = useState<Application[]>([]);
   const [statusFilter, setStatusFilter] = useState<StatusFilterId>("applied");
+  const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedApp, setSelectedApp] = useState<Application | null>(null);
@@ -199,6 +200,8 @@ function SyncedApplicationsContent({
           user={user}
           statusFilter={statusFilter}
           onFilterChange={setStatusFilter}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
           applicationsCount={0}
           onSyncClick={() => setSyncOptionsOpen(true)}
           onAddClick={() => setAddApplicationOpen(true)}
@@ -221,7 +224,7 @@ function SyncedApplicationsContent({
     );
   }
 
-  const filtered = filterApplications(applications, statusFilter);
+  const filtered = filterApplications(applications, statusFilter, searchQuery);
   const activeFilterLabel =
     STATUS_FILTERS.find((filter) => filter.id === statusFilter)?.label ?? "";
   const countsAheadOfList =
@@ -234,6 +237,8 @@ function SyncedApplicationsContent({
           user={user}
           statusFilter={statusFilter}
           onFilterChange={setStatusFilter}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
           applicationsCount={0}
           onSyncClick={() => setSyncOptionsOpen(true)}
           onAddClick={() => setAddApplicationOpen(true)}
@@ -272,6 +277,8 @@ function SyncedApplicationsContent({
         user={user}
         statusFilter={statusFilter}
         onFilterChange={setStatusFilter}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
         applicationsCount={applications.length}
         onSyncClick={() => setSyncOptionsOpen(true)}
         onAddClick={() => setAddApplicationOpen(true)}
@@ -279,7 +286,9 @@ function SyncedApplicationsContent({
         {filtered.length === 0 ? (
           <Card padding="md" className="text-center">
             <p className="text-sm text-muted-foreground">
-              No applications with status &quot;{activeFilterLabel}&quot;.
+              {searchQuery.trim()
+                ? `No results for "${searchQuery}".`
+                : `No applications with status "${activeFilterLabel}".`}
             </p>
           </Card>
         ) : (
@@ -305,6 +314,8 @@ function ApplicationsPageShell({
   user,
   statusFilter,
   onFilterChange,
+  searchQuery,
+  onSearchChange,
   applicationsCount,
   onSyncClick,
   onAddClick,
@@ -313,6 +324,8 @@ function ApplicationsPageShell({
   user: UserProfile;
   statusFilter: StatusFilterId;
   onFilterChange: (filter: StatusFilterId) => void;
+  searchQuery: string;
+  onSearchChange: (q: string) => void;
   applicationsCount: number;
   onSyncClick: () => void;
   onAddClick: () => void;
@@ -320,7 +333,7 @@ function ApplicationsPageShell({
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="shrink-0 space-y-4 pb-4 sm:space-y-4">
+      <div className="shrink-0 space-y-3 pb-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl lg:text-3xl">
@@ -348,6 +361,27 @@ function ApplicationsPageShell({
               Last sync: {formatLastSync(user.sync.lastSyncedAt)}
             </p>
           </div>
+        </div>
+
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder="Search by company or role…"
+            className="h-10 w-full rounded-xl border border-border bg-white pl-9 pr-9 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary/50 focus:ring-2 focus:ring-primary/15"
+          />
+          {searchQuery.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => onSearchChange("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-muted-foreground hover:text-foreground"
+              aria-label="Clear search"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          ) : null}
         </div>
 
         <ApplicationStatusFilters

@@ -262,20 +262,11 @@ class AppSyncState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> runSync({
+  Future<void> _executeSyncPhases({
     DateTime? fromDate,
     DateTime? toDate,
     bool incrementalOnly = false,
   }) async {
-    if (syncButtonState == SyncButtonState.syncing) return;
-    syncButtonState = SyncButtonState.syncing;
-    _setSyncStep(
-      SyncStep.connecting,
-      detail: incrementalOnly
-          ? 'Checking for new emails since last sync'
-          : 'Verifying secure access',
-    );
-
     await UserApi.instance.beginSyncSession();
 
     try {
@@ -383,6 +374,51 @@ class AppSyncState extends ChangeNotifier {
       rethrow;
     } finally {
       UserApi.instance.endSyncSession();
+    }
+  }
+
+  Future<void> runSync({
+    DateTime? fromDate,
+    DateTime? toDate,
+    bool incrementalOnly = false,
+  }) async {
+    if (syncButtonState == SyncButtonState.syncing) return;
+    syncButtonState = SyncButtonState.syncing;
+    _setSyncStep(
+      SyncStep.connecting,
+      detail: incrementalOnly
+          ? 'Checking for new emails since last sync'
+          : 'Verifying secure access',
+    );
+
+    await _executeSyncPhases(
+      fromDate: fromDate,
+      toDate: toDate,
+      incrementalOnly: incrementalOnly,
+    );
+  }
+
+  Future<void> runHistorySync({
+    required Set<String> platformIds,
+    required DateTime fromDate,
+    required DateTime toDate,
+  }) async {
+    if (syncButtonState == SyncButtonState.syncing) return;
+    syncButtonState = SyncButtonState.syncing;
+    _setSyncStep(SyncStep.connecting, detail: 'Preparing sync');
+    notifyListeners();
+
+    try {
+      await UserApi.instance.markImportHistorySync();
+      await saveJobSources(platformIds);
+      _setSyncStep(SyncStep.connecting, detail: 'Verifying secure access');
+      await _executeSyncPhases(fromDate: fromDate, toDate: toDate);
+    } catch (_) {
+      syncButtonState = SyncButtonState.idle;
+      syncStep = SyncStep.idle;
+      syncStepDetail = null;
+      notifyListeners();
+      rethrow;
     }
   }
 

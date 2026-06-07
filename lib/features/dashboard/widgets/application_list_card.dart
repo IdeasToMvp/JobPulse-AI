@@ -117,10 +117,7 @@ class ApplicationListCard extends StatelessWidget {
                                   runSpacing: 4,
                                   crossAxisAlignment: WrapCrossAlignment.center,
                                   children: [
-                                    Text(
-                                      platformLabel(application.platformId),
-                                      style: AppTextStyles.darkStatCaption,
-                                    ),
+                                    ..._platformLabels(application),
                                     if (application.isManual)
                                       Container(
                                         padding: const EdgeInsets.symmetric(
@@ -175,6 +172,30 @@ class ApplicationListCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  List<Widget> _platformLabels(JobApplication app) {
+    final ids = app.effectivePlatformIds;
+    if (ids.length == 1) {
+      return [
+        Text(platformLabel(ids.first), style: AppTextStyles.darkStatCaption),
+      ];
+    }
+    return ids
+        .map(
+          (id) => Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+            decoration: BoxDecoration(
+              color: AppColors.secondary.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              platformLabel(id),
+              style: AppTextStyles.darkStatCaption.copyWith(fontSize: 10),
+            ),
+          ),
+        )
+        .toList();
   }
 
   Widget _infoChip(String label) {

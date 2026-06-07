@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/api/sync_cancelled_exception.dart';
-import '../../../core/api/user_api.dart';
 import '../../../core/app_sync_state.dart';
 import '../../../core/constants/platform_labels.dart';
 import '../../../core/theme/app_colors.dart';
@@ -50,7 +49,6 @@ class SyncPrepareSheet extends StatefulWidget {
 
 class _SyncPrepareSheetState extends State<SyncPrepareSheet> {
   late final Set<String> _selectedIds;
-  bool _isSaving = false;
 
   @override
   void initState() {
@@ -84,12 +82,11 @@ class _SyncPrepareSheetState extends State<SyncPrepareSheet> {
       return;
     }
 
-    setState(() => _isSaving = true);
+    if (mounted) Navigator.of(context).pop();
+
     try {
-      await UserApi.instance.markImportHistorySync();
-      await AppSyncState.instance.saveJobSources(_selectedIds);
-      if (mounted) Navigator.of(context).pop();
-      await AppSyncState.instance.runSync(
+      await AppSyncState.instance.runHistorySync(
+        platformIds: _selectedIds,
         fromDate: _fromDate,
         toDate: _toDate,
       );
@@ -100,8 +97,6 @@ class _SyncPrepareSheetState extends State<SyncPrepareSheet> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Sync failed. Try reconnecting Gmail.')),
       );
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -195,18 +190,9 @@ class _SyncPrepareSheetState extends State<SyncPrepareSheet> {
             ),
             const SizedBox(height: 16),
             FilledButton(
-              onPressed: _isSaving ? null : _startSync,
+              onPressed: _startSync,
               style: _primaryButtonStyle,
-              child: _isSaving
-                  ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: AppColors.white,
-                      ),
-                    )
-                  : const Text('Start Sync'),
+              child: const Text('Start Sync'),
             ),
           ],
         ),

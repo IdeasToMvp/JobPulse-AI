@@ -53,6 +53,7 @@ class ActiveDetailsSheet extends StatefulWidget {
 }
 
 class _ActiveDetailsSheetState extends State<ActiveDetailsSheet> {
+  late final TextEditingController _roleController;
   late final TextEditingController _locationController;
   late final TextEditingController _salaryController;
   late final TextEditingController _roundsController;
@@ -66,6 +67,9 @@ class _ActiveDetailsSheetState extends State<ActiveDetailsSheet> {
     final user = widget.application.userDetails;
     final extracted = widget.application.extractedDetails;
 
+    _roleController = TextEditingController(
+      text: widget.application.role ?? extracted?.role ?? '',
+    );
     _locationController = TextEditingController(
       text: user?.location ?? extracted?.location ?? '',
     );
@@ -81,6 +85,7 @@ class _ActiveDetailsSheetState extends State<ActiveDetailsSheet> {
 
   @override
   void dispose() {
+    _roleController.dispose();
     _locationController.dispose();
     _salaryController.dispose();
     _roundsController.dispose();
@@ -117,9 +122,11 @@ class _ActiveDetailsSheetState extends State<ActiveDetailsSheet> {
           workMode: _workMode,
           notes: _notesController.text.trim(),
         );
+        final roleText = _roleController.text.trim();
         final result = await UserApi.instance.updateApplicationDetails(
           widget.application.id,
           details,
+          role: roleText.isNotEmpty ? roleText : null,
         );
         widget.onUpdated?.call(result.application);
         if (mounted) Navigator.of(context).pop();
@@ -210,6 +217,12 @@ class _ActiveDetailsSheetState extends State<ActiveDetailsSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    _field(
+                      label: 'Role',
+                      controller: _roleController,
+                      hint: 'e.g. Software Engineer',
+                    ),
+                    const SizedBox(height: 12),
                     _field(
                       label: 'Location',
                       controller: _locationController,

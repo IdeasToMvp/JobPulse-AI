@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument */
 import {
   BadRequestException,
   Injectable,
@@ -139,6 +140,7 @@ export class ApplicationsService {
         thread_id: input.threadId,
         cycle_index: input.cycleIndex,
         platform_id: input.platformId,
+        platform_ids: [input.platformId],
         company: input.company,
         company_id: input.companyId ?? null,
         role: input.role ?? null,
@@ -152,6 +154,39 @@ export class ApplicationsService {
       .single();
 
     if (error) this.raise('createApplication', error);
+    return this.mapApplication(data as DbApplicationRow);
+  }
+
+  async addPlatformToApplication(
+    applicationId: string,
+    platformId: string,
+    input: { lastMessageId: string; lastMessageAt: Date },
+  ): Promise<ApplicationRecord> {
+    // Use Postgres array append; avoid duplicates by checking before update
+    const existing = await this.supabase.db
+      .from('applications')
+      .select('platform_ids')
+      .eq('id', applicationId)
+      .single();
+
+    const currentIds: string[] =
+      (existing.data?.platform_ids as string[]) ?? [];
+    const updatedIds = currentIds.includes(platformId)
+      ? currentIds
+      : [...currentIds, platformId];
+
+    const { data, error } = await this.supabase.db
+      .from('applications')
+      .update({
+        platform_ids: updatedIds,
+        last_message_id: input.lastMessageId,
+        last_message_at: input.lastMessageAt.toISOString(),
+      })
+      .eq('id', applicationId)
+      .select('*')
+      .single();
+
+    if (error) this.raise('addPlatformToApplication', error);
     return this.mapApplication(data as DbApplicationRow);
   }
 
@@ -206,10 +241,7 @@ export class ApplicationsService {
     return this.mapApplication(data as DbApplicationRow);
   }
 
-  async markApplicationsGhosted(
-    userId: string,
-    ids: string[],
-  ): Promise<void> {
+  async markApplicationsGhosted(userId: string, ids: string[]): Promise<void> {
     if (ids.length === 0) return;
 
     const now = new Date();
@@ -371,7 +403,11 @@ export class ApplicationsService {
     const updatePayload: Record<string, unknown> = { status };
 
     if (details) {
-      const merged = mergeUserDetails(app.userDetails, details, now.toISOString());
+      const merged = mergeUserDetails(
+        app.userDetails,
+        details,
+        now.toISOString(),
+      );
       updatePayload.user_details = userDetailsToDb(merged);
     }
 
@@ -407,7 +443,10 @@ export class ApplicationsService {
       application: {
         ...this.toListItem(updated),
         statusHistory,
-        companyApplications: await this.listCompanyApplications(userId, updated),
+        companyApplications: await this.listCompanyApplications(
+          userId,
+          updated,
+        ),
       },
       previousStatus,
       totals,
@@ -419,16 +458,28 @@ export class ApplicationsService {
     userId: string,
     applicationId: string,
     details: ApplicationUserDetailsDto,
+    role?: string,
   ): Promise<ApplicationDetailResponse> {
     const app = await this.findByIdForUser(userId, applicationId);
     if (!app) throw new NotFoundException('Application not found');
 
     const now = new Date();
-    const merged = mergeUserDetails(app.userDetails, details, now.toISOString());
+    const merged = mergeUserDetails(
+      app.userDetails,
+      details,
+      now.toISOString(),
+    );
+
+    const updatePayload: Record<string, unknown> = {
+      user_details: userDetailsToDb(merged),
+    };
+    if (role !== undefined) {
+      updatePayload.role = role.trim() || null;
+    }
 
     const { data, error } = await this.supabase.db
       .from('applications')
-      .update({ user_details: userDetailsToDb(merged) })
+      .update(updatePayload)
       .eq('id', applicationId)
       .eq('user_id', userId)
       .select('*')
@@ -512,7 +563,10 @@ export class ApplicationsService {
       application: {
         ...this.toListItem(created),
         statusHistory,
-        companyApplications: await this.listCompanyApplications(userId, created),
+        companyApplications: await this.listCompanyApplications(
+          userId,
+          created,
+        ),
       },
       totals,
       lastSyncedAt: (userRow?.last_synced_at as string) ?? null,
@@ -589,6 +643,7 @@ export class ApplicationsService {
       role: app.role,
       status: app.status,
       platformId: app.platformId,
+      platformIds: app.platformIds,
       appliedAt: app.createdAt.toISOString(),
       lastMessageAt: app.lastMessageAt?.toISOString(),
       updatedAt: app.updatedAt.toISOString(),
@@ -602,10 +657,9 @@ export class ApplicationsService {
     return app.companyId ?? normalizeCompanyKey(app.company);
   }
 
-  private buildCompanyStats(apps: ApplicationRecord[]): Map<
-    string,
-    { count: number; roles: string[] }
-  > {
+  private buildCompanyStats(
+    apps: ApplicationRecord[],
+  ): Map<string, { count: number; roles: string[] }> {
     const map = new Map<string, { count: number; roles: Set<string> }>();
     for (const app of apps) {
       const key = this.companyGroupKey(app);
@@ -651,9 +705,7 @@ export class ApplicationsService {
 
       if (error) this.raise('listCompanyApplications', error);
       return (data ?? [])
-        .filter(
-          (row) => normalizeCompanyKey(row.company as string) === key,
-        )
+        .filter((row) => normalizeCompanyKey(row.company as string) === key)
         .map((row) => ({
           id: row.id as string,
           role: (row.role as string) ?? undefined,
@@ -698,9 +750,7 @@ export class ApplicationsService {
       .eq('user_id', userId);
 
     if (error) this.raise('listAllApplications', error);
-    return (data as DbApplicationRow[]).map((row) =>
-      this.mapApplication(row),
-    );
+    return (data as DbApplicationRow[]).map((row) => this.mapApplication(row));
   }
 
   async countApplicationsCreatedSince(
@@ -849,10 +899,10 @@ export class ApplicationsService {
   }> {
     const { totals, byPlatform } = await this.computeAggregates(userId);
 
-    await this.supabase.db.from('user_sync_platform_stats').delete().eq(
-      'user_id',
-      userId,
-    );
+    await this.supabase.db
+      .from('user_sync_platform_stats')
+      .delete()
+      .eq('user_id', userId);
 
     const statRows = Object.entries(byPlatform).map(([platformId, stats]) => ({
       user_id: userId,
@@ -935,12 +985,17 @@ export class ApplicationsService {
   }
 
   private mapApplication(row: DbApplicationRow): ApplicationRecord {
+    const platformIds =
+      row.platform_ids && row.platform_ids.length > 0
+        ? row.platform_ids
+        : [row.platform_id];
     return {
       id: row.id,
       userId: row.user_id,
       threadId: row.thread_id,
       cycleIndex: row.cycle_index,
       platformId: row.platform_id,
+      platformIds,
       company: row.company,
       companyId: row.company_id ?? undefined,
       role: row.role ?? undefined,
@@ -956,7 +1011,9 @@ export class ApplicationsService {
     };
   }
 
-  private mapProcessedEmail(row: Record<string, unknown>): ProcessedEmailRecord {
+  private mapProcessedEmail(
+    row: Record<string, unknown>,
+  ): ProcessedEmailRecord {
     return {
       id: row.id as string,
       userId: row.user_id as string,
@@ -969,8 +1026,8 @@ export class ApplicationsService {
       classificationStatus: row.classification_status as
         | ApplicationStatus
         | 'unknown',
-      classificationSource: (row.classification_source as ClassificationSource) ??
-        undefined,
+      classificationSource:
+        (row.classification_source as ClassificationSource) ?? undefined,
       applicationId: (row.application_id as string) ?? undefined,
       processedAt: new Date(row.processed_at as string),
     };

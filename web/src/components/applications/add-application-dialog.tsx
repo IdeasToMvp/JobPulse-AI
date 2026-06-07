@@ -62,6 +62,7 @@ function AddApplicationForm({
   const [status, setStatus] = useState<ManualApplicationStatus>("applied");
   const [appliedAt, setAppliedAt] = useState(todayInputValue);
   const [details, setDetails] = useState<UserDetailsFormValues>({
+    role: "",
     location: "",
     salary: "",
     rounds: "",

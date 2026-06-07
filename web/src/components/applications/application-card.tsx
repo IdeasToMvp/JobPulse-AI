@@ -54,7 +54,7 @@ export function ApplicationCard({
       />
 
       <div className="pointer-events-none relative z-[2] p-3 pl-4 sm:p-4 sm:pl-5">
-        <div className="flex flex-col gap-2.5">
+          <div className="flex flex-col gap-2.5">
           <div className="flex items-start justify-between gap-2 sm:gap-3">
             <p className="min-w-0 flex-1 text-[15px] font-semibold leading-snug text-foreground break-words sm:truncate sm:text-base">
               {application.company}
@@ -91,9 +91,7 @@ export function ApplicationCard({
 
           <div className="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
             <div className="flex flex-wrap items-center gap-1.5">
-              <p className="text-xs text-muted-foreground">
-                {getPlatformLabel(application.platformId)}
-              </p>
+              <SourceLabels application={application} />
               {application.isManual ? (
                 <span
                   className="inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold"
@@ -125,5 +123,33 @@ function InfoChip({ label }: { label: string }) {
     <span className="inline-block max-w-full truncate rounded-full bg-secondary/10 px-2 py-0.5 text-[10px] font-medium text-foreground">
       {label}
     </span>
+  );
+}
+
+function SourceLabels({ application }: { application: Application }) {
+  const ids =
+    application.platformIds && application.platformIds.length > 0
+      ? application.platformIds
+      : [application.platformId];
+
+  if (ids.length === 1) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        {getPlatformLabel(ids[0]!)}
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {ids.map((id) => (
+        <span
+          key={id}
+          className="inline-flex rounded-full bg-secondary/10 px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+        >
+          {getPlatformLabel(id)}
+        </span>
+      ))}
+    </div>
   );
 }

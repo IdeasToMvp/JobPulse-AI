@@ -1,8 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import {
-  ApplicationRecord,
-  ApplicationExtractedDetails,
-} from '../applications/application.entity';
+import { ApplicationExtractedDetails } from '../applications/application.entity';
 import { ActivitiesService } from '../activities/activities.service';
 import { ApplicationsService } from '../applications/applications.service';
 
@@ -27,6 +24,7 @@ export class ApplicationMatcherService {
   ) {}
 
   async matchAndUpsert(input: MatchEmailInput): Promise<string> {
+    // 1. Same Gmail thread → update message pointer
     const byThread = await this.applications.getLatestApplicationForThread(
       input.userId,
       input.threadId,
@@ -40,6 +38,27 @@ export class ApplicationMatcherService {
       return byThread.id;
     }
 
+    // 2. Same company+role on a different source → merge platforms
+    const byCompanyRole =
+      await this.applications.getLatestApplicationForCompanyNameAndRole(
+        input.userId,
+        input.companyName,
+        input.role,
+      );
+
+    if (byCompanyRole && byCompanyRole.platformId !== input.platformId) {
+      await this.applications.addPlatformToApplication(
+        byCompanyRole.id,
+        input.platformId,
+        {
+          lastMessageId: input.messageId,
+          lastMessageAt: input.messageAt,
+        },
+      );
+      return byCompanyRole.id;
+    }
+
+    // 3. New application
     const created = await this.applications.createApplication({
       userId: input.userId,
       threadId: input.threadId,

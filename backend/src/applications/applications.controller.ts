@@ -40,7 +40,10 @@ export class ApplicationsController {
     @Body() body: CreateManualApplicationDto,
   ) {
     const userId = req.user!.sub;
-    const result = await this.applications.createManualApplication(userId, body);
+    const result = await this.applications.createManualApplication(
+      userId,
+      body,
+    );
     const appliedAt = new Date(body.appliedAt);
 
     await this.activities.recordManualApplication({
@@ -127,6 +130,7 @@ export class ApplicationsController {
       req.user!.sub,
       id,
       body.details,
+      body.role,
     );
 
     return { application };

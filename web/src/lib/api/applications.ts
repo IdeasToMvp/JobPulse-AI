@@ -41,9 +41,10 @@ export async function updateApplicationStatus(
 export async function updateApplicationDetails(
   id: string,
   details: ApplicationUserDetails,
+  role?: string,
 ): Promise<UpdateApplicationDetailsResult> {
   return apiRequest<UpdateApplicationDetailsResult>(`/applications/${id}/details`, {
     method: "PATCH",
-    body: { details },
+    body: { details, ...(role !== undefined ? { role } : {}) },
   });
 }
