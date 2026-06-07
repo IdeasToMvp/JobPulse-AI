@@ -329,13 +329,6 @@ class AppSyncState extends ChangeNotifier {
         scanRange = '${result.scan!.fromDate} → ${result.scan!.toDate}';
       }
       bumpFeedRevision();
-      if (kDebugMode) {
-        debugPrint(
-          'Sync complete → emails: ${result.emailsProcessed}, '
-          'apps: ${result.applicationsCount}, '
-          'companies: ${result.scan?.companiesDiscovered ?? 0}',
-        );
-      }
 
       _setSyncStep(SyncStep.complete);
       syncButtonState = SyncButtonState.success;

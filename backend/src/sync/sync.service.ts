@@ -41,12 +41,10 @@ import { RuleEngineService } from './rule-engine.service';
 import { SyncCancellationService } from './sync-cancellation.service';
 import {
   isNaukriStatusEmail,
-  NaukriStatusParseSource,
   parseNaukriStatusContent,
 } from './naukri-status.parser';
 import {
   isIndeedApplyMessage,
-  IndeedApplyParseSource,
   parseIndeedApplyContent,
 } from './indeed-apply.parser';
 import {
@@ -183,11 +181,6 @@ export class SyncService {
         this.cancellation.throwIfCancelled(userId);
 
         if (await this.applications.isMessageProcessed(userId, messageId)) {
-          if (platformId === 'naukri' || platformId === 'indeed') {
-            this.logger.log(
-              `[${platformId}] skipping already processed messageId=${messageId}`,
-            );
-          }
           skippedProcessed += 1;
           continue;
         }
@@ -653,7 +646,6 @@ export class SyncService {
       messageDate: meta.internalDate,
     });
     let application = parsed.application;
-    let parseSource: NaukriStatusParseSource | 'ai' = parsed.source;
     let aiCalls = 0;
     let classificationSource: 'rule' | 'ai' = 'rule';
 
@@ -670,19 +662,9 @@ export class SyncService {
       if (aiResult) {
         application = aiResult;
         aiCalls += 1;
-        parseSource = 'ai';
         classificationSource = 'ai';
       }
     }
-
-    this.logNaukriStatusDebug({
-      userId,
-      meta,
-      content,
-      application,
-      parseSource,
-      aiCalls,
-    });
 
     if (!application) {
       await this.applications.insertProcessedEmail({
@@ -772,7 +754,6 @@ export class SyncService {
       messageDate: meta.internalDate,
     });
     let application = parsed.application;
-    let parseSource: IndeedApplyParseSource | 'ai' = parsed.source;
     let aiCalls = 0;
     let classificationSource: 'rule' | 'ai' = 'rule';
 
@@ -792,19 +773,9 @@ export class SyncService {
           appliedAt: meta.internalDate,
         };
         aiCalls += 1;
-        parseSource = 'ai';
         classificationSource = 'ai';
       }
     }
-
-    this.logIndeedApplyDebug({
-      userId,
-      meta,
-      content,
-      application,
-      parseSource,
-      aiCalls,
-    });
 
     if (!application) {
       await this.applications.insertProcessedEmail({
@@ -863,118 +834,5 @@ export class SyncService {
     });
 
     return { aiCalls };
-  }
-
-  private logIndeedApplyDebug(input: {
-    userId: string;
-    meta: {
-      id: string;
-      threadId: string;
-      from: string;
-      subject: string;
-      internalDate: Date;
-    };
-    content: {
-      plainText?: string;
-      html?: string;
-      htmlAsText?: string;
-      mimeTypes: string[];
-    } | null;
-    application: {
-      company: string;
-      role: string;
-      location?: string;
-      appliedAt?: Date;
-    } | null;
-    parseSource: IndeedApplyParseSource | 'ai';
-    aiCalls: number;
-  }): void {
-    const { userId, meta, content, application, parseSource, aiCalls } = input;
-
-    this.logger.log(
-      [
-        `[Indeed apply] user=${userId} messageId=${meta.id} threadId=${meta.threadId}`,
-        `from=${meta.from}`,
-        `subject=${meta.subject}`,
-        `internalDate=${meta.internalDate.toISOString()}`,
-        `mimeTypes=${JSON.stringify(content?.mimeTypes ?? [])}`,
-        `plainLen=${content?.plainText?.length ?? 0}`,
-        `htmlLen=${content?.html?.length ?? 0}`,
-        `parseSource=${parseSource}`,
-        `aiCalls=${aiCalls}`,
-        `application=${JSON.stringify(application)}`,
-      ].join('\n'),
-    );
-
-    if (content?.plainText) {
-      this.logger.log(
-        `[Indeed apply plain] messageId=${meta.id}\n${this.truncateForLog(content.plainText)}`,
-      );
-    }
-
-    if (content?.html) {
-      this.logger.log(
-        `[Indeed apply html] messageId=${meta.id}\n${this.truncateForLog(content.html)}`,
-      );
-    }
-  }
-
-  private logNaukriStatusDebug(input: {
-    userId: string;
-    meta: {
-      id: string;
-      threadId: string;
-      from: string;
-      subject: string;
-      internalDate: Date;
-    };
-    content: {
-      plainText?: string;
-      html?: string;
-      htmlAsText?: string;
-      mimeTypes: string[];
-    } | null;
-    application: {
-      company: string;
-      role: string;
-      location?: string;
-      appliedAt?: Date;
-    } | null;
-    parseSource: NaukriStatusParseSource | 'ai';
-    aiCalls: number;
-  }): void {
-    const { userId, meta, content, application, parseSource, aiCalls } = input;
-
-    this.logger.log(
-      [
-        `[Naukri status] user=${userId} messageId=${meta.id} threadId=${meta.threadId}`,
-        `from=${meta.from}`,
-        `subject=${meta.subject}`,
-        `internalDate=${meta.internalDate.toISOString()}`,
-        `mimeTypes=${JSON.stringify(content?.mimeTypes ?? [])}`,
-        `plainLen=${content?.plainText?.length ?? 0}`,
-        `htmlLen=${content?.html?.length ?? 0}`,
-        `parseSource=${parseSource}`,
-        `aiCalls=${aiCalls}`,
-        `application=${JSON.stringify(application)}`,
-      ].join('\n'),
-    );
-
-    if (content?.plainText) {
-      this.logger.log(
-        `[Naukri status plain] messageId=${meta.id}\n${this.truncateForLog(content.plainText)}`,
-      );
-    }
-
-    if (content?.html) {
-      this.logger.log(
-        `[Naukri status html] messageId=${meta.id}\n${this.truncateForLog(content.html)}`,
-      );
-    }
-  }
-
-  private truncateForLog(value: string, maxLen = 120_000): string {
-    if (value.length <= maxLen) return value;
-    return `${value.slice(0, maxLen)}\n... [truncated ${value.length - maxLen} chars]`;
   }
 }
