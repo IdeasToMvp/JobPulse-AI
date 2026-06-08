@@ -1,8 +1,10 @@
 "use client";
 
 import { CheckCircle2 } from "lucide-react";
+import Link from "next/link";
 
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
+import { LegalFooterLinks } from "@/components/legal/legal-footer-links";
 import { ApplicationPipelinePreview } from "@/components/marketing/application-pipeline-preview";
 import { TrustBadges } from "@/components/marketing/feature-list";
 import { MarketingHeader } from "@/components/marketing/marketing-header";
@@ -71,9 +73,23 @@ export default function LoginPage() {
             <p className="mt-8 text-xs leading-relaxed text-muted-foreground">
               We only read emails related to your job search. Personal messages
               are never accessed. By signing in, you agree to our{" "}
-              <span className="text-foreground/80">Terms of Service</span> and{" "}
-              <span className="text-foreground/80">Privacy Policy</span>.
+              <Link
+                href="/terms"
+                className="font-medium text-foreground/80 underline-offset-2 hover:text-foreground hover:underline"
+              >
+                Terms of Service
+              </Link>{" "}
+              and{" "}
+              <Link
+                href="/privacy"
+                className="font-medium text-foreground/80 underline-offset-2 hover:text-foreground hover:underline"
+              >
+                Privacy Policy
+              </Link>
+              .
             </p>
+
+            <LegalFooterLinks className="mt-4" />
           </div>
         </section>
       </div>

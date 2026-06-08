@@ -10,6 +10,7 @@ import {
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { LegalFooterLinks } from "@/components/legal/legal-footer-links";
 import { ApplicationPipelinePreview } from "@/components/marketing/application-pipeline-preview";
 import { FeatureList, TrustBadges } from "@/components/marketing/feature-list";
 import { MarketingHeader } from "@/components/marketing/marketing-header";
@@ -153,9 +154,12 @@ export function LandingView() {
             <TrustBadges className="mt-6" />
           </div>
 
-          <p className="mt-auto pt-8 text-center text-[11px] leading-relaxed text-muted-foreground lg:text-left">
-            Free to start · Gmail OAuth · Job-related emails only
-          </p>
+          <div className="mt-auto space-y-3 pt-8 text-center lg:text-left">
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              Free to start · Gmail OAuth · Job-related emails only
+            </p>
+            <LegalFooterLinks className="text-[11px]" />
+          </div>
         </section>
       </div>
     </div>

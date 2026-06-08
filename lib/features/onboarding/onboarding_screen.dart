@@ -1,7 +1,9 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
+import '../legal/legal_document_screen.dart';
 import '../login/login_screen.dart';
 import 'widgets/onboarding_feature_card.dart';
 import 'widgets/onboarding_hero.dart';
@@ -110,11 +112,38 @@ class OnboardingScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              Text(
-                'By continuing, you agree to our Terms of Service and Privacy Policy.',
-                style: AppTextStyles.onboardingFooter,
+              RichText(
                 textAlign: TextAlign.center,
-                maxLines: 2,
+                text: TextSpan(
+                  style: AppTextStyles.onboardingFooter,
+                  children: [
+                    const TextSpan(
+                      text: 'By continuing, you agree to our ',
+                    ),
+                    TextSpan(
+                      text: 'Terms of Service',
+                      style: AppTextStyles.onboardingFooter.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      recognizer: TapGestureRecognizer()
+                        ..onTap =
+                            () => LegalDocumentScreen.openTerms(context),
+                    ),
+                    const TextSpan(text: ' and '),
+                    TextSpan(
+                      text: 'Privacy Policy',
+                      style: AppTextStyles.onboardingFooter.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      recognizer: TapGestureRecognizer()
+                        ..onTap =
+                            () => LegalDocumentScreen.openPrivacy(context),
+                    ),
+                    const TextSpan(text: '.'),
+                  ],
+                ),
               ),
               const SizedBox(height: 6),
             ],

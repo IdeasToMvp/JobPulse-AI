@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/auth/auth_service.dart';
@@ -5,6 +6,7 @@ import '../../core/auth/auth_state.dart';
 import '../../core/config/app_config.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
+import '../legal/legal_document_screen.dart';
 import '../platforms/platforms_screen.dart';
 import 'widgets/google_logo.dart';
 import 'widgets/login_hero_icon.dart';
@@ -272,11 +274,15 @@ class _LoginScreenState extends State<LoginScreen> {
           TextSpan(
             text: 'TERMS OF SERVICE',
             style: AppTextStyles.loginLegalLink,
+            recognizer: TapGestureRecognizer()
+              ..onTap = () => LegalDocumentScreen.openTerms(context),
           ),
           const TextSpan(text: ' & '),
           TextSpan(
             text: 'PRIVACY POLICY',
             style: AppTextStyles.loginLegalLink,
+            recognizer: TapGestureRecognizer()
+              ..onTap = () => LegalDocumentScreen.openPrivacy(context),
           ),
         ],
       ),

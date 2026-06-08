@@ -9,6 +9,8 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
+import Link from "next/link";
+
 import { ConfirmDialog } from "@/components/account/confirm-dialog";
 import { EditJobSourcesDialog } from "@/components/account/edit-job-sources-dialog";
 import { Button } from "@/components/ui/button";
@@ -259,15 +261,29 @@ export function AccountView() {
           </div>
         </AccountSection>
 
-        <AccountSection title="Privacy">
-          <Button
-            variant="outline"
-            fullWidth
-            className="min-h-11 border-error/50 text-error hover:bg-error/5"
-            onClick={() => setDeleteStep(1)}
-          >
-            Delete All Data
-          </Button>
+        <AccountSection title="Privacy & Legal">
+          <div className="space-y-3">
+            <Link
+              href="/privacy"
+              className="inline-flex min-h-11 w-full touch-manipulation items-center justify-center rounded-xl border border-secondary/40 bg-white px-4 text-sm font-medium text-secondary transition-colors hover:bg-secondary/5"
+            >
+              Privacy Policy
+            </Link>
+            <Link
+              href="/terms"
+              className="inline-flex min-h-11 w-full touch-manipulation items-center justify-center rounded-xl border border-secondary/40 bg-white px-4 text-sm font-medium text-secondary transition-colors hover:bg-secondary/5"
+            >
+              Terms of Service
+            </Link>
+            <Button
+              variant="outline"
+              fullWidth
+              className="min-h-11 border-error/50 text-error hover:bg-error/5"
+              onClick={() => setDeleteStep(1)}
+            >
+              Delete All Data
+            </Button>
+          </div>
         </AccountSection>
 
         <AccountSection title="Session">

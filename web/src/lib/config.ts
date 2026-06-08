@@ -28,6 +28,18 @@ export function getOAuthCallbackUrl(): string {
   return `${siteUrl}${appConfig.oauthCallbackPath}`;
 }
 
+export function getSiteUrl(): string {
+  return process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3001";
+}
+
+export function getPrivacyPolicyUrl(): string {
+  return `${getSiteUrl()}/privacy`;
+}
+
+export function getTermsOfServiceUrl(): string {
+  return `${getSiteUrl()}/terms`;
+}
+
 /** Direct download URL for the Android APK (e.g. Google Drive export link). */
 export function getAndroidApkDownloadUrl(): string | null {
   const url = process.env.NEXT_PUBLIC_ANDROID_APK_URL?.trim();
