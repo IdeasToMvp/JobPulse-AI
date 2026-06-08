@@ -31,4 +31,17 @@ export default () => ({
   autoSync: {
     enabled: process.env.ENABLE_AUTO_SYNC_CRON !== 'false',
   },
+  adminApiKey: process.env.ADMIN_API_KEY ?? '',
+  androidRelease: {
+    enabled: process.env.ANDROID_UPDATE_ENABLED === 'true',
+    latestVersion: process.env.ANDROID_LATEST_VERSION ?? '1.0.0',
+    latestBuildNumber: parseInt(process.env.ANDROID_LATEST_BUILD ?? '1', 10),
+    apkUrl: process.env.ANDROID_APK_URL ?? '',
+    releaseNotes: process.env.ANDROID_RELEASE_NOTES ?? '',
+    forceUpdate: process.env.ANDROID_FORCE_UPDATE === 'true',
+    minSupportedBuildNumber: parseInt(
+      process.env.ANDROID_MIN_SUPPORTED_BUILD ?? '1',
+      10,
+    ),
+  },
 });

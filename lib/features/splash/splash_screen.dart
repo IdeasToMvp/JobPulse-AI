@@ -2,8 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../core/auth/auth_state.dart';
 import '../../core/app_sync_state.dart';
+import '../../core/app_update/app_update_service.dart';
+import '../../core/auth/auth_state.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../main/main_shell.dart';
@@ -36,6 +37,9 @@ class _SplashScreenState extends State<SplashScreen>
   Future<void> _bootstrap() async {
     await Future<void>.delayed(const Duration(seconds: 2));
     if (!mounted) return;
+
+    final canProceed = await AppUpdateService.instance.checkAndPrompt(context);
+    if (!canProceed || !mounted) return;
 
     final hasSession = await AuthState.instance.restoreSession();
     if (!mounted) return;

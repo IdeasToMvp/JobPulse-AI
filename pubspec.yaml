@@ -39,6 +39,8 @@ dependencies:
   flutter_secure_storage: ^10.3.1
   flutter_web_auth_2: ^5.0.3
   flutter_local_notifications: ^19.0.0
+  package_info_plus: ^10.1.0
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:

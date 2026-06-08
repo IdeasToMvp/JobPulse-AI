@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/app_sync_state.dart';
+import '../../core/app_update/app_update_service.dart';
 import '../../core/auth/auth_state.dart';
 import '../../core/notifications/app_notification_service.dart';
 import '../../core/notifications/auto_sync_monitor.dart';
@@ -62,6 +63,9 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(AutoSyncMonitor.instance.onAppResumed());
+      if (mounted) {
+        unawaited(AppUpdateService.instance.checkAndPrompt(context));
+      }
     }
   }
 
