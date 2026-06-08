@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import '../config/app_config.dart';
 import '../models/user_profile.dart';
+import '../network/network_errors.dart';
 import 'token_storage.dart';
 
 class AuthException implements Exception {
@@ -23,12 +24,20 @@ class AuthService {
 
   Future<UserProfile> signInWithGoogle() async {
     final clientRedirect = Uri.encodeComponent(AppConfig.oauthClientRedirectUri);
-    final urlResponse = await http.get(
-      Uri.parse(
-        '${AppConfig.apiBaseUrl}/auth/google/url'
-        '?clientRedirectUri=$clientRedirect',
-      ),
-    );
+    final http.Response urlResponse;
+    try {
+      urlResponse = await http.get(
+        Uri.parse(
+          '${AppConfig.apiBaseUrl}/auth/google/url'
+          '?clientRedirectUri=$clientRedirect',
+        ),
+      );
+    } catch (e) {
+      if (isBackendConnectionError(e)) {
+        throw AuthException(AppConfig.localBackendConnectionErrorMessage);
+      }
+      rethrow;
+    }
 
     if (urlResponse.statusCode != 200) {
       throw AuthException(
@@ -81,10 +90,18 @@ class AuthService {
   }
 
   Future<UserProfile> fetchCurrentUser(String token) async {
-    final response = await http.get(
-      Uri.parse('${AppConfig.apiBaseUrl}/auth/me'),
-      headers: {'Authorization': 'Bearer $token'},
-    );
+    final http.Response response;
+    try {
+      response = await http.get(
+        Uri.parse('${AppConfig.apiBaseUrl}/auth/me'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+    } catch (e) {
+      if (isBackendConnectionError(e)) {
+        throw AuthException(AppConfig.localBackendConnectionErrorMessage);
+      }
+      rethrow;
+    }
 
     if (response.statusCode != 200) {
       throw AuthException('Session expired. Please sign in again.');

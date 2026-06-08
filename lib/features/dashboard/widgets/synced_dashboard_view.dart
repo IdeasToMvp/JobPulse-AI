@@ -137,6 +137,7 @@ class _DashboardContent extends StatelessWidget {
                 iconColor: const Color(0xFF60A5FA),
                 value: '${sync.appliedCount}',
                 label: 'Applied',
+                statusFilter: 'applied',
               ),
             ),
             const SizedBox(width: 10),
@@ -146,6 +147,7 @@ class _DashboardContent extends StatelessWidget {
                 iconColor: AppColors.secondary,
                 value: '${sync.activeCount}',
                 label: 'Active',
+                statusFilter: 'active',
               ),
             ),
           ],
@@ -160,6 +162,7 @@ class _DashboardContent extends StatelessWidget {
                 value: '${sync.interviewsCount}',
                 label: 'Interviews',
                 accentColor: AppColors.warning,
+                statusFilter: 'interview',
               ),
             ),
             const SizedBox(width: 10),
@@ -170,6 +173,7 @@ class _DashboardContent extends StatelessWidget {
                 value: '${sync.offersCount}',
                 label: 'Offers',
                 accentColor: AppColors.success,
+                statusFilter: 'offer',
               ),
             ),
           ],
@@ -184,6 +188,7 @@ class _DashboardContent extends StatelessWidget {
                 value: '${sync.rejectedCount}',
                 label: 'Rejected',
                 accentColor: AppColors.error,
+                statusFilter: 'rejected',
               ),
             ),
             const SizedBox(width: 10),
@@ -193,6 +198,7 @@ class _DashboardContent extends StatelessWidget {
                 iconColor: AppColors.dashboardMuted,
                 value: '${sync.ghostedCount}',
                 label: 'Ghosted',
+                statusFilter: 'ghosted',
               ),
             ),
           ],
@@ -206,27 +212,36 @@ class _DashboardContent extends StatelessWidget {
     required Color iconColor,
     required String value,
     required String label,
+    required String statusFilter,
     Color? accentColor,
   }) {
-    return GlassCard(
-      padding: const EdgeInsets.all(14),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          border: accentColor != null
-              ? Border(left: BorderSide(color: accentColor, width: 3))
-              : null,
-        ),
-        child: Padding(
-          padding: EdgeInsets.only(left: accentColor != null ? 10 : 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(icon, color: iconColor, size: 18),
-              const SizedBox(height: 12),
-              Text(value, style: AppTextStyles.darkStatValue),
-              const SizedBox(height: 4),
-              Text(label, style: AppTextStyles.darkStatCaption),
-            ],
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () =>
+            AppSyncState.instance.navigateToApplicationsStatus(statusFilter),
+        borderRadius: BorderRadius.circular(16),
+        child: GlassCard(
+          padding: const EdgeInsets.all(14),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              border: accentColor != null
+                  ? Border(left: BorderSide(color: accentColor, width: 3))
+                  : null,
+            ),
+            child: Padding(
+              padding: EdgeInsets.only(left: accentColor != null ? 10 : 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(icon, color: iconColor, size: 18),
+                  const SizedBox(height: 12),
+                  Text(value, style: AppTextStyles.darkStatValue),
+                  const SizedBox(height: 4),
+                  Text(label, style: AppTextStyles.darkStatCaption),
+                ],
+              ),
+            ),
           ),
         ),
       ),

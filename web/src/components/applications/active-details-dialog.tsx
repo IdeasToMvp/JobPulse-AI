@@ -147,7 +147,19 @@ function ActiveDetailsForm({
         </p>
       ) : null}
 
-      <div className="mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain pr-1">
+      <div
+        className="mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain pr-1"
+        onMouseDown={(event) => {
+          const target = event.target as HTMLElement;
+          if (
+            target.tagName !== "INPUT" &&
+            target.tagName !== "TEXTAREA" &&
+            target.tagName !== "BUTTON"
+          ) {
+            (document.activeElement as HTMLElement | null)?.blur();
+          }
+        }}
+      >
         <FormField
           label="Role"
           value={values.role}
@@ -301,6 +313,7 @@ function FormField({
           value={value}
           rows={3}
           placeholder={placeholder}
+          enterKeyHint="done"
           onChange={(event) => onChange(event.target.value)}
           className={cn(className, "min-h-[5.5rem] resize-y")}
         />
@@ -311,7 +324,13 @@ function FormField({
           placeholder={placeholder}
           inputMode={inputMode}
           pattern={pattern}
+          enterKeyHint="done"
           onChange={(event) => onChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              (event.currentTarget as HTMLInputElement).blur();
+            }
+          }}
           className={className}
         />
       )}

@@ -58,12 +58,22 @@ class _ActiveDetailsSheetState extends State<ActiveDetailsSheet> {
   late final TextEditingController _salaryController;
   late final TextEditingController _roundsController;
   late final TextEditingController _notesController;
+  late final FocusNode _roleFocus;
+  late final FocusNode _locationFocus;
+  late final FocusNode _salaryFocus;
+  late final FocusNode _roundsFocus;
+  late final FocusNode _notesFocus;
   String? _workMode;
   bool _submitting = false;
 
   @override
   void initState() {
     super.initState();
+    _roleFocus = FocusNode();
+    _locationFocus = FocusNode();
+    _salaryFocus = FocusNode();
+    _roundsFocus = FocusNode();
+    _notesFocus = FocusNode();
     final user = widget.application.userDetails;
     final extracted = widget.application.extractedDetails;
 
@@ -90,7 +100,16 @@ class _ActiveDetailsSheetState extends State<ActiveDetailsSheet> {
     _salaryController.dispose();
     _roundsController.dispose();
     _notesController.dispose();
+    _roleFocus.dispose();
+    _locationFocus.dispose();
+    _salaryFocus.dispose();
+    _roundsFocus.dispose();
+    _notesFocus.dispose();
     super.dispose();
+  }
+
+  void _dismissKeyboard() {
+    FocusManager.instance.primaryFocus?.unfocus();
   }
 
   ApplicationUserDetails? _buildDetailsPayload() {
@@ -169,21 +188,24 @@ class _ActiveDetailsSheetState extends State<ActiveDetailsSheet> {
   @override
   Widget build(BuildContext context) {
     final isEditOnly = widget.mode == ActiveDetailsMode.editOnly;
-    final maxHeight = MediaQuery.sizeOf(context).height * 0.85;
+    final viewInsets = MediaQuery.viewInsetsOf(context);
+    final maxHeight = MediaQuery.sizeOf(context).height * 0.92 - viewInsets.top;
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(
-        20,
-        12,
-        20,
-        20 + MediaQuery.paddingOf(context).bottom,
-      ),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: maxHeight),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+      padding: EdgeInsets.only(bottom: viewInsets.bottom),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          20,
+          12,
+          20,
+          20 + MediaQuery.paddingOf(context).bottom,
+        ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: maxHeight),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
             Center(
               child: Container(
                 width: 40,
@@ -213,54 +235,77 @@ class _ActiveDetailsSheetState extends State<ActiveDetailsSheet> {
             ],
             const SizedBox(height: 16),
             Flexible(
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _field(
-                      label: 'Role',
-                      controller: _roleController,
-                      hint: 'e.g. Software Engineer',
-                    ),
-                    const SizedBox(height: 12),
-                    _field(
-                      label: 'Location',
-                      controller: _locationController,
-                      hint: 'e.g. Bangalore or Remote',
-                    ),
-                    const SizedBox(height: 12),
-                    _field(
-                      label: 'Salary',
-                      controller: _salaryController,
-                      hint: 'e.g. ₹18–22 LPA',
-                    ),
-                    const SizedBox(height: 12),
-                    _field(
-                      label: 'Number of rounds',
-                      controller: _roundsController,
-                      hint: 'e.g. 3',
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    ),
-                    const SizedBox(height: 12),
-                    Text('Work mode', style: AppTextStyles.darkStatCaption),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        for (final mode in const ['remote', 'hybrid', 'onsite'])
-                          _workModeChip(mode),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    _field(
-                      label: 'Notes',
-                      controller: _notesController,
-                      hint: 'Recruiter, next step, etc.',
-                      maxLines: 3,
-                    ),
-                  ],
+              child: GestureDetector(
+                onTap: _dismissKeyboard,
+                behavior: HitTestBehavior.translucent,
+                child: SingleChildScrollView(
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _field(
+                        label: 'Role',
+                        controller: _roleController,
+                        focusNode: _roleFocus,
+                        hint: 'e.g. Software Engineer',
+                        textInputAction: TextInputAction.next,
+                        onSubmitted: (_) =>
+                            _locationFocus.requestFocus(),
+                      ),
+                      const SizedBox(height: 12),
+                      _field(
+                        label: 'Location',
+                        controller: _locationController,
+                        focusNode: _locationFocus,
+                        hint: 'e.g. Bangalore or Remote',
+                        textInputAction: TextInputAction.next,
+                        onSubmitted: (_) => _salaryFocus.requestFocus(),
+                      ),
+                      const SizedBox(height: 12),
+                      _field(
+                        label: 'Salary',
+                        controller: _salaryController,
+                        focusNode: _salaryFocus,
+                        hint: 'e.g. ₹18–22 LPA',
+                        textInputAction: TextInputAction.next,
+                        onSubmitted: (_) => _roundsFocus.requestFocus(),
+                      ),
+                      const SizedBox(height: 12),
+                      _field(
+                        label: 'Number of rounds',
+                        controller: _roundsController,
+                        focusNode: _roundsFocus,
+                        hint: 'e.g. 3',
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        textInputAction: TextInputAction.next,
+                        onSubmitted: (_) => _notesFocus.requestFocus(),
+                      ),
+                      const SizedBox(height: 12),
+                      Text('Work mode', style: AppTextStyles.darkStatCaption),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final mode
+                              in const ['remote', 'hybrid', 'onsite'])
+                            _workModeChip(mode),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      _field(
+                        label: 'Notes',
+                        controller: _notesController,
+                        focusNode: _notesFocus,
+                        hint: 'Recruiter, next step, etc.',
+                        maxLines: 3,
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) => _dismissKeyboard(),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -339,6 +384,7 @@ class _ActiveDetailsSheetState extends State<ActiveDetailsSheet> {
           ],
         ),
       ),
+      ),
     );
   }
 
@@ -346,8 +392,11 @@ class _ActiveDetailsSheetState extends State<ActiveDetailsSheet> {
     required String label,
     required TextEditingController controller,
     required String hint,
+    FocusNode? focusNode,
     TextInputType? keyboardType,
     List<TextInputFormatter>? inputFormatters,
+    TextInputAction? textInputAction,
+    ValueChanged<String>? onSubmitted,
     int maxLines = 1,
   }) {
     return Column(
@@ -357,9 +406,12 @@ class _ActiveDetailsSheetState extends State<ActiveDetailsSheet> {
         const SizedBox(height: 6),
         TextField(
           controller: controller,
+          focusNode: focusNode,
           keyboardType: keyboardType,
           inputFormatters: inputFormatters,
           maxLines: maxLines,
+          textInputAction: textInputAction,
+          onSubmitted: onSubmitted,
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: AppTextStyles.darkStatCaption,
@@ -397,6 +449,7 @@ class _ActiveDetailsSheetState extends State<ActiveDetailsSheet> {
       onSelected: _submitting
           ? null
           : (value) {
+              _dismissKeyboard();
               setState(() {
                 _workMode = value ? mode : null;
               });

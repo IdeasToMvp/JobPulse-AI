@@ -44,6 +44,9 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
     _lastSyncAt = AppSyncState.instance.sync.lastSyncedAt;
     _lastFeedRevision = AppSyncState.instance.feedRevision;
     _lastAppliedCount = AppSyncState.instance.sync.appliedCount;
+    _statusFilter =
+        AppSyncState.instance.consumePendingApplicationsStatusFilter() ??
+            _statusFilter;
     AppSyncState.instance.addListener(_onSyncStateChanged);
     _load();
   }
@@ -56,6 +59,12 @@ class _ApplicationsTabViewState extends State<ApplicationsTabView> {
   }
 
   void _onSyncStateChanged() {
+    final pendingStatus =
+        AppSyncState.instance.consumePendingApplicationsStatusFilter();
+    if (pendingStatus != null && pendingStatus != _statusFilter) {
+      setState(() => _statusFilter = pendingStatus);
+    }
+
     final syncAt = AppSyncState.instance.sync.lastSyncedAt;
     final feedRevision = AppSyncState.instance.feedRevision;
     final appliedCount = AppSyncState.instance.sync.appliedCount;

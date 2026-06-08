@@ -10,6 +10,7 @@ class AppConfig {
   static const _apiPath = '/api/v1';
 
   /// Full URL override: `--dart-define=API_BASE_URL=http://192.168.1.42:3000/api/v1`
+  /// Or use `--dart-define-from-file=dev.json` (see dev.json.example).
   static const _apiBaseUrlOverride = String.fromEnvironment('API_BASE_URL');
 
   /// Host override for physical devices on the same Wi‑Fi:
@@ -22,6 +23,35 @@ class AppConfig {
 
   static String get localApiBaseUrl {
     return 'http://$localApiHost:$_localPort$_apiPath';
+  }
+
+  /// True when running on a physical iPhone/iPad (not the iOS Simulator).
+  static bool get isIOSPhysicalDevice {
+    if (kIsWeb || !Platform.isIOS) return false;
+    return Platform.environment.containsKey('SIMULATOR_DEVICE_NAME') == false;
+  }
+
+  /// Physical phones cannot reach the dev machine via 127.0.0.1 / localhost.
+  static bool get requiresLanHostForLocalDev =>
+      isUsingLocalBackend &&
+      isIOSPhysicalDevice &&
+      _apiHostOverride.isEmpty &&
+      _apiBaseUrlOverride.isEmpty;
+
+  static String get localDevSetupHint {
+    return 'Cannot reach the backend at $localApiBaseUrl from a physical '
+        'iPhone. Use your Mac\'s Wi‑Fi IP instead, e.g.\n'
+        'flutter run --dart-define=API_HOST=192.168.1.42\n'
+        'Or copy dev.json.example to dev.json and run '
+        '--dart-define-from-file=dev.json';
+  }
+
+  static String get localBackendConnectionErrorMessage {
+    if (requiresLanHostForLocalDev) {
+      return localDevSetupHint;
+    }
+    return 'Cannot reach the backend at $apiBaseUrl. '
+        'Make sure the Nest server is running on port $_localPort.';
   }
 
   /// Resolves the machine running the Nest server for local testing.

@@ -32,6 +32,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    AppSyncState.instance.addListener(_onAppSyncNavigation);
     unawaited(_bootstrap());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!AuthState.instance.isAuthenticated && mounted) {
@@ -46,7 +47,15 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    AppSyncState.instance.removeListener(_onAppSyncNavigation);
     super.dispose();
+  }
+
+  void _onAppSyncNavigation() {
+    final tab = AppSyncState.instance.consumePendingMainTabIndex();
+    if (tab != null && mounted) {
+      setState(() => _currentIndex = tab);
+    }
   }
 
   @override

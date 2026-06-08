@@ -17,12 +17,14 @@ export function buildStatCards(sync: UserSyncState): StatCardConfig[] {
       label: "Applied",
       value: sync.appliedCount,
       iconColor: "#60A5FA",
+      statusFilter: "applied",
     },
     {
       icon: Zap,
       label: "Active",
       value: sync.activeCount,
       iconColor: "#8B5CF6",
+      statusFilter: "active",
     },
     {
       icon: CalendarDays,
@@ -30,6 +32,7 @@ export function buildStatCards(sync: UserSyncState): StatCardConfig[] {
       value: sync.interviewsCount,
       iconColor: "#F59E0B",
       accentColor: "#F59E0B",
+      statusFilter: "interview",
     },
     {
       icon: CheckCircle2,
@@ -37,6 +40,7 @@ export function buildStatCards(sync: UserSyncState): StatCardConfig[] {
       value: sync.offersCount,
       iconColor: "#22C55E",
       accentColor: "#22C55E",
+      statusFilter: "offer",
     },
     {
       icon: XCircle,
@@ -44,12 +48,14 @@ export function buildStatCards(sync: UserSyncState): StatCardConfig[] {
       value: sync.rejectedCount,
       iconColor: "#EF4444",
       accentColor: "#EF4444",
+      statusFilter: "rejected",
     },
     {
       icon: EyeOff,
       label: "Ghosted",
       value: sync.ghostedCount,
       iconColor: "#8E8E98",
+      statusFilter: "ghosted",
     },
   ];
 }

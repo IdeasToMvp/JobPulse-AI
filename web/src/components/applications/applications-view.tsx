@@ -1,6 +1,7 @@
 "use client";
 
 import { Briefcase, Loader2, Plus, Search, X } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { ActiveDetailsDialog } from "@/components/applications/active-details-dialog";
@@ -17,7 +18,22 @@ import { Card } from "@/components/ui/card";
 import { fetchApplications } from "@/lib/api/applications";
 import { useAuth } from "@/lib/auth/auth-context";
 import { STATUS_FILTERS } from "@/lib/constants/application-status";
-import type { Application, ApplicationDetail, StatusFilterId } from "@/lib/types/application";
+import type {
+  Application,
+  ApplicationDetail,
+  StatusFilterId,
+} from "@/lib/types/application";
+
+const STATUS_FILTER_IDS = new Set(
+  STATUS_FILTERS.map((filter) => filter.id),
+);
+
+function parseStatusFilter(value: string | null): StatusFilterId | null {
+  if (!value || !STATUS_FILTER_IDS.has(value as StatusFilterId)) {
+    return null;
+  }
+  return value as StatusFilterId;
+}
 import type { UserProfile, UserSyncState } from "@/lib/types/user";
 import { filterApplications } from "@/lib/utils/application";
 import { formatLastSync } from "@/lib/utils/dashboard";
@@ -45,8 +61,11 @@ function SyncedApplicationsContent({
   refreshUser: () => Promise<void>;
   mergeUserSync: (sync: UserSyncState) => void;
 }) {
+  const searchParams = useSearchParams();
   const [applications, setApplications] = useState<Application[]>([]);
-  const [statusFilter, setStatusFilter] = useState<StatusFilterId>("applied");
+  const [statusFilter, setStatusFilter] = useState<StatusFilterId>(
+    () => parseStatusFilter(searchParams.get("status")) ?? "applied",
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -65,6 +84,13 @@ function SyncedApplicationsContent({
   const [syncOptionsOpen, setSyncOptionsOpen] = useState(false);
   const [syncPrepareOpen, setSyncPrepareOpen] = useState(false);
   const [addApplicationOpen, setAddApplicationOpen] = useState(false);
+
+  useEffect(() => {
+    const status = parseStatusFilter(searchParams.get("status"));
+    if (status) {
+      setStatusFilter(status);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     let cancelled = false;

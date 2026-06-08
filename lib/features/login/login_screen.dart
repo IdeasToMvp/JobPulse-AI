@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/auth/auth_service.dart';
 import '../../core/auth/auth_state.dart';
+import '../../core/config/app_config.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_text_styles.dart';
 import '../platforms/platforms_screen.dart';
@@ -35,7 +36,10 @@ class _LoginScreenState extends State<LoginScreen> {
     } on AuthException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
+        SnackBar(
+          content: Text(e.message),
+          duration: const Duration(seconds: 8),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -91,6 +95,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     textAlign: TextAlign.center,
                   ),
                 ),
+                if (AppConfig.requiresLanHostForLocalDev) ...[
+                  const SizedBox(height: 12),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: _localDevBanner(),
+                  ),
+                ],
                 const SizedBox(height: 20),
                 Expanded(child: _buildActionCard()),
                 const SizedBox(height: 12),
@@ -99,6 +110,24 @@ class _LoginScreenState extends State<LoginScreen> {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _localDevBanner() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.warning.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.warning.withValues(alpha: 0.35)),
+      ),
+      child: Text(
+        'Local dev on a physical iPhone needs your Mac\'s Wi‑Fi IP. '
+        'Re-run with:\nflutter run --dart-define=API_HOST=YOUR_MAC_IP',
+        style: AppTextStyles.loginSecurityBody.copyWith(
+          color: AppColors.onboardingTitle,
         ),
       ),
     );

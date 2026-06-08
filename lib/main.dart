@@ -11,6 +11,9 @@ void main() {
       'JobPulse API → ${AppConfig.apiBaseUrl}'
       '${AppConfig.isUsingLocalBackend ? ' (local backend)' : ''}',
     );
+    if (AppConfig.requiresLanHostForLocalDev) {
+      debugPrint('⚠️ ${AppConfig.localDevSetupHint}');
+    }
   }
   runApp(const JobSyncApp());
 }

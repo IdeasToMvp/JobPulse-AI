@@ -60,6 +60,9 @@ class AppSyncState extends ChangeNotifier {
   int feedRevision = 0;
   final Set<String> selectedPlatformIds = {};
 
+  int? pendingMainTabIndex;
+  String? pendingApplicationsStatusFilter;
+
   final Map<String, bool> notificationSettings = {
     'interview_alerts': true,
     'offer_alerts': true,
@@ -187,6 +190,24 @@ class AppSyncState extends ChangeNotifier {
   void bumpFeedRevision() {
     feedRevision++;
     notifyListeners();
+  }
+
+  void navigateToApplicationsStatus(String statusFilter) {
+    pendingApplicationsStatusFilter = statusFilter;
+    pendingMainTabIndex = 1;
+    notifyListeners();
+  }
+
+  int? consumePendingMainTabIndex() {
+    final index = pendingMainTabIndex;
+    pendingMainTabIndex = null;
+    return index;
+  }
+
+  String? consumePendingApplicationsStatusFilter() {
+    final status = pendingApplicationsStatusFilter;
+    pendingApplicationsStatusFilter = null;
+    return status;
   }
 
   void disconnectGmail() {

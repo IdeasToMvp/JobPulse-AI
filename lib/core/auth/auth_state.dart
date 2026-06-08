@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../app_sync_state.dart';
 import '../models/user_profile.dart';
+import '../network/network_errors.dart';
 import 'auth_service.dart';
 import 'token_storage.dart';
 
@@ -29,8 +30,12 @@ class AuthState extends ChangeNotifier {
       final profile = await AuthService.instance.fetchCurrentUser(token);
       _applySession(token, profile);
       return true;
-    } catch (_) {
-      await AuthService.instance.signOut();
+    } catch (e) {
+      if (isBackendConnectionError(e)) {
+        _clearLocal();
+        return false;
+      }
+      await TokenStorage.clear();
       _clearLocal();
       return false;
     } finally {
